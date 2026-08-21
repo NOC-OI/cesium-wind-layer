@@ -1,5 +1,30 @@
 # cesium-wind-layer
 
+## 0.11.0
+
+### Minor Changes
+
+- feat: add configurable zoom scaling with `minVisibleRatio`
+
+  - Add `minVisibleRatio` to `WindLayerOptions`, with a default value of `0.6`
+  - Clamp camera-driven particle width, trail length, and speed scaling while zooming
+  - Allow `minVisibleRatio: 1` to keep the overview scale constant at every zoom level
+  - Add a Minimum Visible Ratio control to the example website
+
+### Patch Changes
+
+- fix: restore overview particle styling after zooming out
+
+  - Reset the viewer longitude and latitude ranges to the complete data bounds when viewport corners fall outside the globe
+  - Restore the overview pixel scale instead of retaining the previous zoomed-in configuration
+  - Prevent particle width, trail length, and speed from remaining stuck at regional-view values
+
+- chore: add tagged GitHub package releases
+
+  - Build an installable package tarball for matching `v*` tags
+  - Attach the tarball to the corresponding GitHub Release
+  - Update package repository metadata for `NOC-OI/cesium-wind-layer`
+
 ## 0.10.1
 
 ### Patch Changes

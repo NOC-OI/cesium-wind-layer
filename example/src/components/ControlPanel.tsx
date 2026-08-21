@@ -13,21 +13,21 @@ const { Text } = Typography;
 // Styled components for compact layout
 const CompactFormItem = styled(Form.Item)`
   margin-bottom: 8px !important;
-  
+
   .ant-form-item-label {
     padding-bottom: 4px;
     > label {
       height: 24px;
     }
   }
-  
+
   .ant-slider {
     margin: 4px 0;
-    
+
     @media (max-width: 767px) {
       /* 增大触摸区域 */
       padding: 8px 0;
-      
+
       .ant-slider-handle {
         width: 20px;
         height: 20px;
@@ -35,13 +35,13 @@ const CompactFormItem = styled(Form.Item)`
       }
     }
   }
-  
+
   .ant-switch {
     @media (max-width: 767px) {
       /* 增大开关大小 */
       min-width: 44px;
       height: 24px;
-      
+
       &::after {
         width: 20px;
         height: 20px;
@@ -54,16 +54,16 @@ const StyledCard = styled(Card)`
   .ant-card-head {
     min-height: 40px;
     padding: 0 12px;
-    
+
     .ant-card-head-title {
       padding: 8px 0;
     }
   }
-  
+
   &.ant-card-small > .ant-card-head {
     border-bottom: 1px solid #f0f0f0;
   }
-  
+
   @media (max-width: 767px) {
     width: 100% !important;
     border-radius: 8px;
@@ -78,7 +78,7 @@ const CollapseButton = styled.div<{ $collapsed: boolean }>`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  
+
   svg {
     transition: transform 0.3s;
     transform: rotate(${props => props.$collapsed ? 0 : 180}deg);
@@ -90,26 +90,26 @@ const CardContent = styled.div<{ $collapsed: boolean }>`
   overflow: auto;
   transition: max-height 0.3s ease-in-out, padding 0.3s ease-in-out;
   padding: ${props => props.$collapsed ? '0 12px' : '12px'};
-  
+
   @media (max-width: 767px) {
     max-height: ${props => props.$collapsed ? '0' : '60vh'};
-    
+
     /* 自定义滚动条样式 */
     &::-webkit-scrollbar {
       width: 4px;
     }
-    
+
     &::-webkit-scrollbar-track {
       background: #f1f1f1;
       border-radius: 2px;
     }
-    
+
     &::-webkit-scrollbar-thumb {
       background: #888;
       border-radius: 2px;
     }
   }
-  
+
   > *:last-child {
     margin-bottom: 0;
   }
@@ -123,7 +123,7 @@ const CardTitle = styled.div`
   cursor: pointer;
   padding: 4px 0;
   user-select: none;
-  
+
   &:hover {
     opacity: 0.8;
   }
@@ -136,12 +136,12 @@ const TitleText = styled.span`
 const ControlPanelContainer = styled.div`
   position: absolute;
   z-index: 1000;
-  
+
   @media (min-width: 768px) {
     left: 20px;
     top: 20px;
   }
-  
+
   @media (max-width: 767px) {
     left: 50%;
     bottom: 20px;
@@ -170,12 +170,12 @@ const TitleButton = styled.button`
   color: rgba(0, 0, 0, 0.45);
   transition: all 0.3s;
   border-radius: 4px;
-  
+
   &:hover {
     color: rgba(0, 0, 0, 0.85);
     background: rgba(0, 0, 0, 0.04);
   }
-  
+
   &:active {
     background: rgba(0, 0, 0, 0.08);
   }
@@ -202,7 +202,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
     ...WindLayer.defaultOptions,
     ...initialOptions,
   });
-  
+
   const [collapsed, setCollapsed] = useState(false);
   const [visible, setVisible] = useState(true);
 
@@ -228,7 +228,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const handleValuesChange = (changedValues: Partial<WindLayerOptions>, allValues: WindLayerOptions) => {
     setOptions(allValues);
-    
+
     if (changedValues.colors) {
       windLayer?.updateOptions({ colors: changedValues.colors });
     } else {
@@ -354,7 +354,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       >
                         <InputNumber
                           min={0.1}
-                          max={10}
+                          max={100}
                           step={0.1}
                           precision={1}
                           placeholder='Max Width'
@@ -385,7 +385,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       >
                         <InputNumber
                           min={1}
-                          max={500}
+                          max={10000}
                           step={1}
                           precision={1}
                           placeholder='Min Length'
@@ -404,7 +404,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       >
                         <InputNumber
                           min={1}
-                          max={500}
+                          max={10000}
                           step={1}
                           precision={1}
                           placeholder='Max Length'
@@ -452,7 +452,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   'Array of colors for particles. Can be used to create color gradients.'
                 )}
               >
-                <ColorTableInput 
+                <ColorTableInput
                   value={options.colors}
                   onChange={(colors) => {
                     handleValuesChange({ colors }, { ...options, colors });
@@ -488,6 +488,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   checkedChildren="View Bounds"
                   unCheckedChildren="Global"
                 />
+              </CompactFormItem>
+
+              <CompactFormItem
+                name="minVisibleRatio"
+                label={renderLabel(
+                  'Minimum Visible Ratio',
+                  'Minimum overview scale retained while zooming. Use 1 for constant particle width, length, and speed scaling.'
+                )}
+              >
+                <NumberInput min={0} max={1} step={0.05} precision={2} />
               </CompactFormItem>
 
               <CompactFormItem

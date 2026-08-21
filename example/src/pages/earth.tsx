@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Viewer, Rectangle, ArcGisMapServerImageryProvider, ImageryLayer, Ion, CesiumTerrainProvider } from 'cesium';
-import { WindLayer, WindLayerOptions, WindData } from 'cesium-wind-layer';
+import { WindLayer, WindLayerOptions } from 'cesium-wind-layer';
 import { ControlPanel } from '@/components/ControlPanel';
 import styled from 'styled-components';
 import { colorSchemes } from '@/components/ColorTableInput';
 import { SpeedQuery } from '@/components/SpeedQuery';
+import { loadGlobalZarrCurrents } from '@/data/zarrCurrents';
 
 Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhY2IzNzQzNi1iOTVkLTRkZjItOWVkZi1iMGUyYTUxN2Q5YzYiLCJpZCI6NTUwODUsImlhdCI6MTcyNTQyMDE4NX0.yHbHpszFexPrxX6_55y0RgNrHjBQNu9eYkW9cXKUTPk';
 
@@ -22,58 +23,36 @@ const CesiumContainer = styled.div`
   overflow: hidden;
 `;
 
-const SwitchButton = styled.button`
+const LoadingMessage = styled.div`
   position: absolute;
   top: 20px;
   right: 20px;
   padding: 8px 16px;
-  background-color: rgba(255, 255, 255, 0.8);
+  color: #222;
+  background-color: rgba(255, 255, 255, 0.9);
   border: 1px solid #ccc;
   border-radius: 4px;
-  cursor: pointer;
   z-index: 1000;
-
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.9);
-  }
 `;
 
-// Add data configurations
-const dataConfigs = {
-  wind: {
-    options: {
-      domain: {
-        min: 0,
-        max: 8,
-      },
-      speedFactor: 0.8,
-      lineWidth: { min: 1, max: 2 },
-      lineLength: { min: 10, max: 100 },
-      particleHeight: 100,
-    },
-    file: '/wind.json'
-  },
-  ocean: {
-    options: {
-      domain: {
-        min: 0,
-        max: 1,
-      },
-      speedFactor: 8,
-      lineWidth: { min: 1, max: 4 },
-      lineLength: { min: 20, max: 50 },
-      particleHeight: 10,
-    },
-    file: '/ocean.json'
-  }
+const currentOptions = {
+  domain: { min: 0, max: 0.7 },
+  speedFactor: 10,
+  // Keep slow currents legible when the complete globe is visible.
+  lineWidth: { min: 1.5, max: 10.0 },
+  lineLength: { min: 100, max: 1000 },
+  particleHeight: 100,
 };
 
 const defaultOptions: Partial<WindLayerOptions> = {
   ...WindLayer.defaultOptions,
-  particlesTextureSize: 200,
+  // Particle count is size squared: 200 gives 40,000 particles globally.
+  particlesTextureSize: 400,
   colors: colorSchemes.find(item => item.value === 'cool')?.colors.reverse(),
   flipY: true,
-  useViewerBounds: true,
+  // Keep a persistent global particle distribution while zooming. When true,
+  // recycled particles become concentrated in the last zoomed-in region.
+  useViewerBounds: false,
   dynamic: true,
 };
 
@@ -81,12 +60,11 @@ export function Earth() {
   const viewerRef = useRef<Viewer | null>(null);
   const windLayerRef = useRef<WindLayer | null>(null);
   const [, setIsWindLayerReady] = useState(false);
-  const windDataFiles = [dataConfigs.wind.file, dataConfigs.ocean.file];
   const isFirstLoadRef = useRef(true);
-  const [currentDataIndex, setCurrentDataIndex] = useState(0);
-  const [currentOptions, setCurrentOptions] = useState<WindLayerOptions>({
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [options, setOptions] = useState<WindLayerOptions>({
     ...defaultOptions,
-    ...dataConfigs.wind.options
+    ...currentOptions
   } as WindLayerOptions);
 
   useEffect(() => {
@@ -123,30 +101,18 @@ export function Earth() {
     // Optional: Add exaggeration to make terrain features more visible
     // viewerRef.current.scene.verticalExaggeration = 2;
     // viewerRef.current.sceneModePicker.viewModel.duration = 0;
-    
+
     const initWindLayer = async () => {
       try {
-        const res = await fetch(windDataFiles[0]);
-        const data = await res.json();
+        const windData = await loadGlobalZarrCurrents();
 
         if (!isComponentMounted || !viewerRef.current) return;
 
-        const windData: WindData = {
-          ...data,
-          bounds: {
-            west: data.bbox[0],
-            south: data.bbox[1],
-            east: data.bbox[2],
-            north: data.bbox[3],
-          }
-        };
-
-        // Apply initial options with wind configuration
         const initialOptions = {
           ...defaultOptions,
-          ...dataConfigs.wind.options
+          ...currentOptions
         };
-        setCurrentOptions(initialOptions as WindLayerOptions);
+        setOptions(initialOptions as WindLayerOptions);
 
         if (isFirstLoadRef.current && windData.bounds) {
           const rectangle = Rectangle.fromDegrees(
@@ -163,7 +129,7 @@ export function Earth() {
         }
 
         const layer = new WindLayer(viewerRef.current, windData, initialOptions);
-        
+
         // Add event listeners
         layer.addEventListener('dataChange', (data) => {
           console.log('Wind data updated:', data);
@@ -179,6 +145,9 @@ export function Earth() {
         setIsWindLayerReady(true);
       } catch (error) {
         console.error('Failed to initialize wind layer:', error);
+        if (isComponentMounted) {
+          setLoadError(error instanceof Error ? error.message : 'Unable to load currents');
+        }
       }
     };
 
@@ -188,7 +157,7 @@ export function Earth() {
     return () => {
       isComponentMounted = false;
       isFirstLoadRef.current = true;
-      
+
       if (windLayerRef.current) {
         windLayerRef.current.destroy();
         windLayerRef.current = null;
@@ -203,57 +172,22 @@ export function Earth() {
   }, []);
 
   const handleOptionsChange = (changedOptions: Partial<WindLayerOptions>) => {
-    setCurrentOptions({
-      ...currentOptions,
+    setOptions({
+      ...options,
       ...changedOptions
     });
-  };
-
-  const handleSwitchData = async () => {
-    try {
-      const nextIndex = (currentDataIndex + 1) % windDataFiles.length;
-      const res = await fetch(windDataFiles[nextIndex]);
-      const data = await res.json();
-
-      if (!windLayerRef.current) return;
-
-      const windData: WindData = {
-        ...data,
-        bounds: {
-          west: data.bbox[0],
-          south: data.bbox[1],
-          east: data.bbox[2],
-          north: data.bbox[3],
-        }
-      };
-
-      // Get the correct configuration based on the next index
-      const configKey = nextIndex === 0 ? 'wind' : 'ocean';
-      const newOptions = {
-        ...currentOptions, // Keep current options
-        ...dataConfigs[configKey].options // Only override specific options
-      };
-
-      // Update both the wind data and options
-      windLayerRef.current.updateOptions(newOptions);
-      windLayerRef.current.updateWindData(windData);
-      setCurrentOptions(newOptions);
-      setCurrentDataIndex(nextIndex);
-    } catch (error) {
-      console.error('Failed to switch wind data:', error);
-    }
   };
 
   return (
     <PageContainer>
       <SpeedQuery windLayer={windLayerRef.current} viewer={viewerRef.current} />
       <CesiumContainer id="cesiumContainer">
-        <SwitchButton onClick={handleSwitchData}>
-          Switch to {currentDataIndex === 0 ? 'Ocean' : 'Wind'} Data
-        </SwitchButton>
+        {!windLayerRef.current && (
+          <LoadingMessage>{loadError ? `Failed to load currents: ${loadError}` : 'Loading global Zarr currents…'}</LoadingMessage>
+        )}
         <ControlPanel
           windLayer={windLayerRef.current}
-          initialOptions={currentOptions}
+          initialOptions={options}
           onOptionsChange={handleOptionsChange}
         />
       </CesiumContainer>

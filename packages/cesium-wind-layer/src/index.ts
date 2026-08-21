@@ -27,6 +27,7 @@ export const DefaultOptions: WindLayerOptions = {
   colors: ['white'],
   flipY: false,
   useViewerBounds: false,
+  minVisibleRatio: 0.6,
   domain: undefined,
   displayRange: undefined,
   dynamic: true
@@ -81,6 +82,7 @@ export class WindLayer {
    * @param {string[]} [options.colors=['white']] - Array of colors for particles. Can be used to create color gradients.
    * @param {boolean} [options.flipY=false] - Whether to flip the Y-axis of the wind data.
    * @param {boolean} [options.useViewerBounds=false] - Whether to use the viewer bounds to generate particles.
+   * @param {number} [options.minVisibleRatio=0.6] - Minimum overview scale retained while zooming; use 1 to disable zoom scaling.
    * @param {boolean} [options.dynamic=true] - Whether to enable dynamic particle animation.
    */
   constructor(viewer: Viewer, windData: WindData, options?: Partial<WindLayerOptions>) {
@@ -253,7 +255,21 @@ export class WindLayer {
       maxLat = Math.max(maxLat, lat);
     }
 
-    if (!isOutsideGlobe) { // -30 degrees in radians
+    if (isOutsideGlobe) {
+      // In a globe overview the canvas corners usually fall outside the
+      // ellipsoid. Keeping the previous values here leaves the layer stuck
+      // with the shorter/slower styling calculated for the last zoomed-in
+      // region. Restore the full data extent and overview scale instead.
+      this.viewerParameters.lonRange = new Cartesian2(
+        this.windData.bounds.west,
+        this.windData.bounds.east
+      );
+      this.viewerParameters.latRange = new Cartesian2(
+        this.windData.bounds.south,
+        this.windData.bounds.north
+      );
+      this.viewerParameters.pixelSize = 1000.0;
+    } else { // -30 degrees in radians
       // Calculate intersection with data bounds
       const lonRange = new Cartesian2(
         Math.max(this.windData.bounds.west, minLon),
@@ -283,9 +299,11 @@ export class WindLayer {
       const visibleRatioLon = (lonRange.y - lonRange.x) / dataLonRange;
       const visibleRatioLat = (latRange.y - latRange.x) / dataLatRange;
       const visibleRatio = Math.min(visibleRatioLon, visibleRatioLat);
+      const minVisibleRatio = Math.max(0, Math.min(1, this.options.minVisibleRatio));
+      const clampedVisibleRatio = Math.max(minVisibleRatio, Math.min(1, visibleRatio));
 
-      // Map the ratio to a pixelSize value between 0 and 1000
-      const pixelSize = 1000 * visibleRatio;
+      // Retain a configurable portion of the overview scale while zooming.
+      const pixelSize = 1000 * clampedVisibleRatio;
       if (pixelSize > 0) {
         this.viewerParameters.pixelSize = Math.max(0, Math.min(1000, pixelSize));
       }

@@ -1,0 +1,59 @@
+name: Package tagged release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.10.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package version
+        run: |
+          package_version=$(node -p "require('./packages/cesium-wind-layer/package.json').version")
+          tag_version="${GITHUB_REF_NAME#v}"
+          test "$package_version" = "$tag_version" || {
+            echo "Tag $GITHUB_REF_NAME does not match package version $package_version"
+            exit 1
+          }
+
+      - name: Build package
+        run: pnpm --filter cesium-wind-layer build
+
+      - name: Create installable tarball
+        run: |
+          mkdir -p release
+          pnpm --dir packages/cesium-wind-layer pack --pack-destination "$GITHUB_WORKSPACE/release"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cesium-wind-layer-${{ github.ref_name }}
+          path: release/*.tgz
+
+      - name: Attach package to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.tgz
+          generate_release_notes: true

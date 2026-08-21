@@ -57,6 +57,11 @@ export interface WindLayerOptions {
    */
   useViewerBounds?: boolean;
   /**
+   * Minimum fraction of the overview particle scale retained while zooming.
+   * Use 1 to disable camera-driven scaling. Default is 0.6.
+   */
+  minVisibleRatio: number;
+  /**
    * Controls the speed rendering range. Default is undefined.
    * @property {number} [min] - Minimum speed value for rendering
    * @property {number} [max] - Maximum speed value for rendering

@@ -102,6 +102,7 @@ interface WindLayerOptions {
   colors: string[];                          // Array of colors for particles. Can be used to create color gradients. Default is ['white'].
   flipY: boolean;                            // Whether to flip the Y-axis of the wind data. Default is false.
   useViewerBounds: boolean;                  // Whether to use the viewer bounds to generate particles. Default is false.
+  minVisibleRatio: number;                   // Minimum zoom scale retained for width, length, and speed. Default is 0.6; use 1 to disable zoom scaling.
   domain?: {                                 // Controls the speed rendering range. Default is undefined.
     min?: number;                            // Minimum speed value for rendering
     max?: number;                            // Maximum speed value for rendering
