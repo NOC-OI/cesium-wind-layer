@@ -1,5 +1,15 @@
 # cesium-wind-layer
 
+## 0.11.1
+
+### Patch Changes
+
+- fix: ensure consumers use a single Cesium runtime
+
+  - Broaden the Cesium peer range to `>=1.119.0 <2` to match supported Zarr-Cesium versions
+  - Explicitly externalize Cesium from development and production library builds
+  - Keep Cesium as a development dependency only for local compilation and type checking
+
 ## 0.11.0
 
 ### Minor Changes
