@@ -45,7 +45,10 @@ jobs:
       - name: Build demo
         run: pnpm --filter example build
         env:
-          VITE_BASE_PATH: /cesium-wind-layer/
+          # vite-plugin-cesium also uses Vite's base as its output directory.
+          # A relative base keeps Cesium at dist/cesium while resolving it
+          # beneath the GitHub Pages repository path in the browser.
+          VITE_BASE_PATH: ./
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
