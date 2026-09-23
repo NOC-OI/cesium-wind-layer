@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Switch, Space, Tooltip, Typography, Form, InputNumber } from 'antd';
-import { WindLayer, WindLayerOptions } from 'cesium-wind-layer';
+import { WindLayer, WindLayerOptions } from 'cube-cesium-wind-layer';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import ColorTableInput from './ColorTableInput';
 import styled from 'styled-components';

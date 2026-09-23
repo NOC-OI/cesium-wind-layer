@@ -7,14 +7,19 @@ import {
   Rectangle
 } from 'cesium';
 
-import { WindLayerOptions, WindData, WindDataAtLonLat } from './types';
+import { WindLayerOptions, WindData, WindCubeData, WindFieldData, WindDataAtLonLat, ProcessedWindData } from './types';
 import { WindParticleSystem } from './windParticleSystem';
 import { deepMerge } from './utils';
 
 export * from './types';
 
 type WindLayerEventType = 'dataChange' | 'optionsChange';
-type WindLayerEventCallback = (data: WindData | WindLayerOptions) => void;
+type WindLayerEventCallback = (data: WindFieldData | WindLayerOptions) => void;
+
+function effectiveParticleTextureSize(baseSize: number, depth: number, elevationStep: number): number {
+  const activeLevels = Math.ceil(depth / elevationStep);
+  return Math.ceil(baseSize * Math.sqrt(activeLevels));
+}
 
 export const DefaultOptions: WindLayerOptions = {
   particlesTextureSize: 100,
@@ -26,6 +31,9 @@ export const DefaultOptions: WindLayerOptions = {
   lineLength: { min: 20, max: 100 },
   colors: ['white'],
   flipY: false,
+  verticalExaggeration: 1,
+  belowSeaLevel: false,
+  elevationStep: 1,
   useViewerBounds: false,
   minVisibleRatio: 0.6,
   domain: undefined,
@@ -36,7 +44,7 @@ export const DefaultOptions: WindLayerOptions = {
 export class WindLayer {
   private _show: boolean = true;
   private _resized: boolean = false;
-  windData: Required<WindData>;
+  windData: ProcessedWindData;
 
   get show(): boolean {
     return this._show;
@@ -64,32 +72,60 @@ export class WindLayer {
   private _isDestroyed: boolean = false;
   private primitives: any[] = [];
   private eventListeners: Map<WindLayerEventType, Set<WindLayerEventCallback>> = new Map();
+  private flipYOverride?: boolean;
+  private isCubeData: boolean;
+  private particleTextureSizePerLevel: number;
+  private readonly viewerChangedListener = () => this.updateViewerParameters();
+  private readonly resizeListener = () => this.updateViewerParameters();
 
   /**
    * WindLayer class for visualizing wind field data with particle animation in Cesium.
    * 
    * @class
    * @param {Viewer} viewer - The Cesium viewer instance.
-   * @param {WindData} windData - The wind field data to visualize.
+   * @param {WindFieldData} windData - The 2D wind field or complete velocity cube to visualize.
    * @param {Partial<WindLayerOptions>} [options] - Optional configuration options for the wind layer.
-   * @param {number} [options.particlesTextureSize=100] - Size of the particle texture. Determines the maximum number of particles (size squared).
-   * @param {number} [options.particleHeight=0] - Height of particles above the ground in meters.
+   * @param {number} [options.particlesTextureSize=100] - Texture dimension for 2D data, or the per-level particle-density baseline for a cube.
+   * @param {number} [options.particleHeight=1000] - Height of 2D particles above the ground in meters.
    * @param {Object} [options.lineWidth={ min: 1, max: 2 }] - Width range of particle trails.
    * @param {Object} [options.lineLength={ min: 20, max: 100 }] - Length range of particle trails.
    * @param {number} [options.speedFactor=1.0] - Factor to adjust the speed of particles.
    * @param {number} [options.dropRate=0.003] - Rate at which particles are dropped (reset).
    * @param {number} [options.dropRateBump=0.001] - Additional drop rate for slow-moving particles.
    * @param {string[]} [options.colors=['white']] - Array of colors for particles. Can be used to create color gradients.
-   * @param {boolean} [options.flipY=false] - Whether to flip the Y-axis of the wind data.
+   * @param {boolean} [options.flipY=false] - Deprecated 2D-only texture-orientation override. Use windData.latIsAscending.
+   * @param {number} [options.verticalExaggeration=1] - Multiplier applied to cube elevation coordinates.
+   * @param {boolean} [options.belowSeaLevel=false] - Whether cube levels extend downwards from their maximum elevation.
+   * @param {number} [options.elevationStep=1] - Positive integer interval between populated cube levels.
    * @param {boolean} [options.useViewerBounds=false] - Whether to use the viewer bounds to generate particles.
    * @param {number} [options.minVisibleRatio=0.6] - Minimum overview scale retained while zooming; use 1 to disable zoom scaling.
    * @param {boolean} [options.dynamic=true] - Whether to enable dynamic particle animation.
    */
-  constructor(viewer: Viewer, windData: WindData, options?: Partial<WindLayerOptions>) {
+  constructor(viewer: Viewer, windData: WindFieldData, options?: Partial<WindLayerOptions>) {
     this.show = true;
     this.viewer = viewer;
     this.scene = viewer.scene;
-    this.options = { ...WindLayer.defaultOptions, ...options };
+    this.isCubeData = 'depth' in windData;
+    this.flipYOverride = this.isCubeData ? undefined : options?.flipY;
+    const semanticFlipY = windData.latIsAscending === undefined
+      ? WindLayer.defaultOptions.flipY
+      : !windData.latIsAscending;
+    const derivedFlipY = this.isCubeData ? semanticFlipY : options?.flipY ?? semanticFlipY;
+    const mergedOptions = { ...WindLayer.defaultOptions, ...options, flipY: derivedFlipY };
+    this.particleTextureSizePerLevel = mergedOptions.particlesTextureSize;
+    const depth = 'depth' in windData ? windData.depth : 1;
+    mergedOptions.particlesTextureSize = effectiveParticleTextureSize(
+      this.particleTextureSizePerLevel,
+      depth,
+      mergedOptions.elevationStep
+    );
+    if (mergedOptions.particlesTextureSize > this.scene.context.maximumTextureSize) {
+      throw new RangeError(
+        `Cube particle texture size ${mergedOptions.particlesTextureSize} exceeds the GPU limit ` +
+        `${this.scene.context.maximumTextureSize}`
+      );
+    }
+    this.options = mergedOptions;
     this.windData = this.processWindData(windData);
 
     this.viewerParameters = {
@@ -108,23 +144,43 @@ export class WindLayer {
 
   private setupEventListeners(): void {
     this.viewer.camera.percentageChanged = 0.01;
-    this.viewer.camera.changed.addEventListener(this.updateViewerParameters.bind(this));
-    this.scene.morphComplete.addEventListener(this.updateViewerParameters.bind(this));
-    window.addEventListener("resize", this.updateViewerParameters.bind(this));
+    this.viewer.camera.changed.addEventListener(this.viewerChangedListener);
+    this.scene.morphComplete.addEventListener(this.viewerChangedListener);
+    window.addEventListener("resize", this.resizeListener);
   }
 
   private removeEventListeners(): void {
-    this.viewer.camera.changed.removeEventListener(this.updateViewerParameters.bind(this));
-    this.scene.morphComplete.removeEventListener(this.updateViewerParameters.bind(this));
-    window.removeEventListener("resize", this.updateViewerParameters.bind(this));
+    this.viewer.camera.changed.removeEventListener(this.viewerChangedListener);
+    this.scene.morphComplete.removeEventListener(this.viewerChangedListener);
+    window.removeEventListener("resize", this.resizeListener);
   }
 
-  private processWindData(windData: WindData): Required<WindData> {
+  private processWindData(windData: WindFieldData): ProcessedWindData {
+    const depth = 'depth' in windData ? windData.depth : 1;
+    const elevations = 'elevations' in windData ? Array.from(windData.elevations, Number) : [this.options.particleHeight];
+    const expectedLength = windData.width * windData.height * depth;
+    if (!Number.isInteger(windData.width) || windData.width < 1 ||
+      !Number.isInteger(windData.height) || windData.height < 1 ||
+      !Number.isInteger(depth) || depth < 1) {
+      throw new RangeError('Wind data dimensions must be positive integers');
+    }
+    if (windData.u.array.length !== expectedLength || windData.v.array.length !== expectedLength) {
+      throw new RangeError(`Wind component arrays must contain ${expectedLength} values`);
+    }
+    if (elevations.length !== depth || elevations.some(value => !Number.isFinite(value))) {
+      throw new RangeError('Wind cube elevations must be finite and match its depth');
+    }
+    if (this.options.elevationStep < 1 || !Number.isInteger(this.options.elevationStep)) {
+      throw new RangeError('elevationStep must be a positive integer');
+    }
+    if (windData.speed?.array && windData.speed.array.length !== expectedLength) {
+      throw new RangeError(`Wind speed array must contain ${expectedLength} values`);
+    }
     if (windData.speed?.min === undefined || windData.speed?.max === undefined || windData.speed.array === undefined) {
       const speed = {
         array: new Float32Array(windData.u.array.length),
-        min: Number.MAX_VALUE,
-        max: Number.MIN_VALUE
+        min: Number.POSITIVE_INFINITY,
+        max: Number.NEGATIVE_INFINITY
       };
       for (let i = 0; i < windData.u.array.length; i++) {
         speed.array[i] = Math.sqrt(windData.u.array[i] * windData.u.array[i] + windData.v.array[i] * windData.v.array[i]);
@@ -133,10 +189,46 @@ export class WindLayer {
           speed.max = Math.max(speed.max, speed.array[i]);
         }
       }
+      if (!Number.isFinite(speed.min)) speed.min = 0;
+      if (!Number.isFinite(speed.max)) speed.max = 0;
       windData = { ...windData, speed };
     }
 
-    return windData as Required<WindData>;
+    const maximumElevation = Math.max(...elevations);
+    const particleHeights = Float32Array.from(elevations, elevation =>
+      this.options.belowSeaLevel
+        ? -(maximumElevation - elevation) * this.options.verticalExaggeration
+        : elevation * this.options.verticalExaggeration
+    );
+    console.info('[WindLayer] processed wind cube', {
+      dimensions: { width: windData.width, height: windData.height, depth },
+      expectedLength,
+      uLength: windData.u.array.length,
+      vLength: windData.v.array.length,
+      elevations,
+      particleHeights: Array.from(particleHeights),
+      latIsAscending: windData.latIsAscending,
+      effectiveFlipY: this.options.flipY,
+      elevationIsAscending: 'elevationIsAscending' in windData
+        ? windData.elevationIsAscending
+        : elevations.length < 2 || elevations[0] < elevations[elevations.length - 1],
+      elevationStep: this.options.elevationStep,
+      particleTextureSizePerLevel: this.particleTextureSizePerLevel,
+      effectiveParticleTextureSize: this.options.particlesTextureSize,
+      particleCount: this.options.particlesTextureSize ** 2,
+      particlesPerActiveLevel: (this.options.particlesTextureSize ** 2) /
+        Math.ceil(depth / this.options.elevationStep)
+    });
+    return {
+      ...windData,
+      speed: windData.speed!,
+      depth,
+      elevations,
+      elevationIsAscending: 'elevationIsAscending' in windData
+        ? windData.elevationIsAscending
+        : elevations.length < 2 || elevations[0] < elevations[elevations.length - 1],
+      particleHeights
+    };
   }
 
   /**
@@ -145,12 +237,13 @@ export class WindLayer {
    * @param {number} lat - The latitude.
    * @returns {Object} - An object containing the u, v, and speed values at the specified coordinates.
    */
-  getDataAtLonLat(lon: number, lat: number): WindDataAtLonLat | null {
-    const { bounds, width, height, u, v, speed } = this.windData;
+  getDataAtLonLat(lon: number, lat: number, elevationIndex: number = 0): WindDataAtLonLat | null {
+    const { bounds, width, height, depth, u, v, speed } = this.windData;
     const { flipY } = this.options;
 
     // Check if the coordinates are within bounds
-    if (lon < bounds.west || lon > bounds.east || lat < bounds.south || lat > bounds.north) {
+    if (lon < bounds.west || lon > bounds.east || lat < bounds.south || lat > bounds.north ||
+      !Number.isInteger(elevationIndex) || elevationIndex < 0 || elevationIndex >= depth) {
       return null;
     }
 
@@ -178,11 +271,12 @@ export class WindLayer {
     const wy = yNorm - y0;
 
     // Get indices
-    const index = y * width + x;
-    const i00 = y0 * width + x0;
-    const i10 = y0 * width + x1;
-    const i01 = y1 * width + x0;
-    const i11 = y1 * width + x1;
+    const levelOffset = elevationIndex * width * height;
+    const index = levelOffset + y * width + x;
+    const i00 = levelOffset + y0 * width + x0;
+    const i10 = levelOffset + y0 * width + x1;
+    const i01 = levelOffset + y1 * width + x0;
+    const i11 = levelOffset + y1 * width + x1;
 
     // Bilinear interpolation for u component
     const u00 = u.array[i00];
@@ -316,11 +410,33 @@ export class WindLayer {
 
   /**
    * Update the wind data of the wind layer.
-   * @param {WindData} data - The new wind data to apply.
+   * @param {WindFieldData} data - The new 2D wind field or complete velocity cube to apply.
    */
-  updateWindData(data: WindData): void {
+  updateWindData(data: WindFieldData): void {
     if (this._isDestroyed) return;
+    this.isCubeData = 'depth' in data;
+    if ((this.isCubeData || this.flipYOverride === undefined) && data.latIsAscending !== undefined) {
+      this.options.flipY = !data.latIsAscending;
+      this.particleSystem.options.flipY = this.options.flipY;
+      this.particleSystem.computing.options.flipY = this.options.flipY;
+    }
+    const depth = 'depth' in data ? data.depth : 1;
+    const particleTextureSize = effectiveParticleTextureSize(
+      this.particleTextureSizePerLevel,
+      depth,
+      this.options.elevationStep
+    );
+    if (particleTextureSize > this.scene.context.maximumTextureSize) {
+      throw new RangeError(
+        `Cube particle texture size ${particleTextureSize} exceeds the GPU limit ` +
+        `${this.scene.context.maximumTextureSize}`
+      );
+    }
     this.windData = this.processWindData(data);
+    if (particleTextureSize !== this.options.particlesTextureSize) {
+      this.particleSystem.changeOptions({ particlesTextureSize: particleTextureSize });
+      this.options.particlesTextureSize = particleTextureSize;
+    }
     this.particleSystem.computing.updateWindData(this.windData);
     this.viewer.scene.requestRender();
     // Dispatch data change event
@@ -333,7 +449,45 @@ export class WindLayer {
    */
   updateOptions(options: Partial<WindLayerOptions>): void {
     if (this._isDestroyed) return;
+    if (!this.isCubeData && options.flipY !== undefined) this.flipYOverride = options.flipY;
+    if (this.isCubeData && options.flipY !== undefined) {
+      options = { ...options };
+      delete options.flipY;
+    }
+    if (options.elevationStep !== undefined &&
+      (!Number.isInteger(options.elevationStep) || options.elevationStep < 1)) {
+      throw new RangeError('elevationStep must be a positive integer');
+    }
+    if (options.verticalExaggeration !== undefined && options.verticalExaggeration <= 0) {
+      throw new RangeError('verticalExaggeration must be greater than zero');
+    }
+    const particleTextureSizePerLevel = options.particlesTextureSize ?? this.particleTextureSizePerLevel;
+    if (options.particlesTextureSize !== undefined) {
+      if (!Number.isFinite(particleTextureSizePerLevel) || particleTextureSizePerLevel <= 0) {
+        throw new RangeError('particlesTextureSize must be greater than zero');
+      }
+    }
+    const elevationStep = options.elevationStep ?? this.options.elevationStep;
+    const particleTextureSize = effectiveParticleTextureSize(
+      particleTextureSizePerLevel,
+      this.windData.depth,
+      elevationStep
+    );
+    if (particleTextureSize > this.scene.context.maximumTextureSize) {
+      throw new RangeError(
+        `Cube particle texture size ${particleTextureSize} exceeds the GPU limit ` +
+        `${this.scene.context.maximumTextureSize}`
+      );
+    }
+    this.particleTextureSizePerLevel = particleTextureSizePerLevel;
+    options = { ...options, particlesTextureSize: particleTextureSize };
+    const heightChanged = options.verticalExaggeration !== undefined ||
+      options.belowSeaLevel !== undefined || options.particleHeight !== undefined;
     this.options = deepMerge(options, this.options);
+    if (heightChanged) {
+      this.windData = this.processWindData(this.windData);
+      this.particleSystem.computing.updateWindData(this.windData);
+    }
     this.particleSystem.changeOptions(options);
     this.viewer.scene.requestRender();
     // Dispatch options change event
@@ -427,10 +581,10 @@ export class WindLayer {
     this.eventListeners.get(type)?.delete(callback);
   }
 
-  private dispatchEvent(type: WindLayerEventType, data: WindData | WindLayerOptions) {
+  private dispatchEvent(type: WindLayerEventType, data: WindFieldData | WindLayerOptions) {
     this.eventListeners.get(type)?.forEach(callback => callback(data));
   }
 
 }
 
-export type { WindLayerOptions, WindData, WindLayerEventType, WindLayerEventCallback };
+export type { WindLayerOptions, WindData, WindCubeData, WindFieldData, WindLayerEventType, WindLayerEventCallback };

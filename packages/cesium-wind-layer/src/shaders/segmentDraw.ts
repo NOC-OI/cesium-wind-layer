@@ -10,7 +10,8 @@ uniform sampler2D postProcessingPosition;
 uniform sampler2D particlesSpeed;
 
 uniform float frameRateAdjustment;
-uniform float particleHeight;
+uniform sampler2D elevation;
+uniform float depth;
 uniform float aspect;
 uniform float pixelSize;
 uniform vec2 lineWidth;
@@ -30,7 +31,12 @@ struct adjacentPoints {
     vec4 next;
 };
 
-vec3 convertCoordinate(vec2 lonLat) {
+float particleHeight(float normalizedLevel) {
+    float level = depth <= 1.0 ? 0.0 : floor(clamp(normalizedLevel, 0.0, 1.0) * (depth - 1.0) + 0.5);
+    return texture(elevation, vec2((level + 0.5) / depth, 0.5)).r;
+}
+
+vec3 convertCoordinate(vec3 position) {
     // WGS84 (lon, lat, lev) -> ECEF (x, y, z)
     // read https://en.wikipedia.org/wiki/Geographic_coordinate_conversion#From_geodetic_to_ECEF_coordinates for detail
 
@@ -39,8 +45,8 @@ vec3 convertCoordinate(vec2 lonLat) {
     float b = 6356752.3142; // Semi-minor axis
     float e2 = 6.69437999014e-3; // First eccentricity squared
 
-    float latitude = radians(lonLat.y);
-    float longitude = radians(lonLat.x);
+    float latitude = radians(position.y);
+    float longitude = radians(position.x);
 
     float cosLat = cos(latitude);
     float sinLat = sin(latitude);
@@ -48,7 +54,7 @@ vec3 convertCoordinate(vec2 lonLat) {
     float sinLon = sin(longitude);
 
     float N_Phi = a / sqrt(1.0 - e2 * sinLat * sinLat);
-    float h = particleHeight; // it should be high enough otherwise the particle may not pass the terrain depth test
+    float h = particleHeight(position.z);
     vec3 cartesian = vec3(0.0);
     cartesian.x = (N_Phi + h) * cosLat * cosLon;
     cartesian.y = (N_Phi + h) * cosLat * sinLon;
@@ -56,14 +62,14 @@ vec3 convertCoordinate(vec2 lonLat) {
     return cartesian;
 }
 
-vec4 calculateProjectedCoordinate(vec2 lonLat) {
+vec4 calculateProjectedCoordinate(vec3 position) {
     if (is3D) {
-        vec3 particlePosition = convertCoordinate(lonLat);
+        vec3 particlePosition = convertCoordinate(position);
         // 使用 modelViewProjection 矩阵进行投影变换
         vec4 projectedPosition = czm_modelViewProjection * vec4(particlePosition, 1.0);
         return projectedPosition;
     } else {
-        vec3 position2D = vec3(radians(lonLat.x), radians(lonLat.y), 0.0);
+        vec3 position2D = vec3(radians(position.x), radians(position.y), 0.0);
         return czm_modelViewProjection * vec4(position2D, 1.0);
     }
 }
@@ -95,9 +101,9 @@ void main() {
     vec2 particleIndex = flippedIndex;
     speed = texture(particlesSpeed, particleIndex);
 
-    vec2 previousPosition = texture(previousParticlesPosition, particleIndex).rg;
-    vec2 currentPosition = texture(currentParticlesPosition, particleIndex).rg;
-    vec2 nextPosition = texture(postProcessingPosition, particleIndex).rg;
+    vec3 previousPosition = texture(previousParticlesPosition, particleIndex).rgb;
+    vec3 currentPosition = texture(currentParticlesPosition, particleIndex).rgb;
+    vec3 nextPosition = texture(postProcessingPosition, particleIndex).rgb;
 
     float isAnyRandomPointUsed = texture(postProcessingPosition, particleIndex).a +
         texture(currentParticlesPosition, particleIndex).a +

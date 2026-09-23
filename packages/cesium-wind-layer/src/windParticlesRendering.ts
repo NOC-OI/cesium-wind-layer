@@ -203,7 +203,8 @@ export class WindParticlesRendering {
           );
           return displayRange;
         },
-        particleHeight: () => this.options.particleHeight || 0,
+        elevation: () => this.computing.windTextures.elevation,
+        depth: () => this.computing.windData.depth,
         aspect: () => this.context.drawingBufferWidth / this.context.drawingBufferHeight,
         pixelSize: () => this.viewerParameters.pixelSize,
         lineWidth: () => {

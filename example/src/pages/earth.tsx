@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Viewer, Rectangle, ArcGisMapServerImageryProvider, ImageryLayer, Ion, CesiumTerrainProvider } from 'cesium';
-import { WindLayer, WindLayerOptions } from 'cesium-wind-layer';
+import { WindLayer, WindLayerOptions } from 'cube-cesium-wind-layer';
 import { ControlPanel } from '@/components/ControlPanel';
 import styled from 'styled-components';
 import { colorSchemes } from '@/components/ColorTableInput';

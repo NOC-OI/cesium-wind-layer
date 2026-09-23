@@ -1,170 +1,204 @@
-# Cesium Wind Layer
+# Cube Cesium Wind Layer
 
-[![npm version](https://img.shields.io/npm/v/cesium-wind-layer.svg)](https://www.npmjs.com/package/cesium-wind-layer)
-[![license](https://img.shields.io/npm/l/cesium-wind-layer.svg)](https://github.com/your-repo/cesium-wind-layer/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/cube-cesium-wind-layer.svg)](https://www.npmjs.com/package/cube-cesium-wind-layer)
+[![license](https://img.shields.io/npm/l/cube-cesium-wind-layer.svg)](https://github.com/NOC-OI/cesium-wind-layer/blob/main/LICENSE)
 
-A Cesium plugin for GPU-accelerated visualization of wind field data with particle animation.
+A GPU-accelerated Cesium particle layer for visualizing two-dimensional wind fields and three-dimensional velocity cubes.
 
-[中文文档](/packages/cesium-wind-layer/readme.zh-CN.md) | [Live Demo](https://cesium-wind-layer.opendde.com/)
+> `cube-cesium-wind-layer` is the npm package for this NOC-OI fork of the original [hongfaqiu/cesium-wind-layer](https://github.com/hongfaqiu/cesium-wind-layer). The original project provides the core GPU particle renderer and Cesium integration. This fork preserves its MIT license and adds velocity-cube rendering, coordinate-orientation metadata, depth/elevation placement, per-level particle density, camera-scale controls, and packaging fixes. These additions are maintained by NOC-OI and should not be understood as upstream features.
+
+[Upstream Chinese documentation](https://github.com/hongfaqiu/cesium-wind-layer/blob/main/packages/cesium-wind-layer/readme.zh-CN.md) | [Upstream live demo](https://cesium-wind-layer.opendde.com/)
 
 | Wind Layer | Terrain Occlusion |
-|-----------------|------------------------|
+|---|---|
 | ![Wind Layer Demo](/pictures/wind.gif) | ![Terrain Occlusion Demo](/pictures/terrain.gif) |
 
-## 📚 Table of Contents
+## Features
 
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [License](#license)
+- Real-time, GPU-accelerated particle visualization
+- Two-dimensional wind fields and complete three-dimensional velocity cubes
+- Actual elevation/depth coordinates with optional vertical exaggeration
+- Semantic latitude and elevation orientation metadata
+- Approximately constant particle density per enabled elevation level
+- Configurable particle appearance, animation, visibility, and camera scaling
+- Terrain occlusion
 
-## ✨ Features
-
-- ⚡️ Real-time wind field visualization using particle system
-- 🚀 GPU-accelerated particle computation and rendering
-- 🎨 Customizable particle appearance and behavior
-- 🏔️ Terrain occlusion support, particles are blocked by terrain
-
-## 📦 Installation
+## Installation
 
 ```bash
-pnpm add cesium-wind-layer
+pnpm add cube-cesium-wind-layer
 ```
 
-## 🚀 Usage
+Cesium is a peer dependency. The application should install and bundle one compatible Cesium runtime.
 
-### Basic Example
+## Two-dimensional data
+
+The U and V arrays must each contain `width * height` values in row-major order: `[latitude][longitude]`. Use `latIsAscending` to describe whether row indices progress from south to north.
 
 ```typescript
 import { Viewer } from 'cesium';
-import { WindLayer } from 'cesium-wind-layer';
+import { WindLayer, type WindData } from 'cube-cesium-wind-layer';
 
-// Create Cesium viewer
 const viewer = new Viewer('cesiumContainer');
 
-// Prepare wind data
-const windData = {
-  u: {
-    array: Float32Array,  // U component of wind velocity
-    min: number,         // Optional: minimum value
-    max: number          // Optional: maximum value
-  },
-  v: {
-    array: Float32Array,  // V component of wind velocity
-    min: number,         // Optional: minimum value
-    max: number          // Optional: maximum value
-  },
-  width: number,         // Data grid width
-  height: number,        // Data grid height
-  bounds: {
-    west: number,        // Western boundary (longitude)
-    south: number,       // Southern boundary (latitude)
-    east: number,        // Eastern boundary (longitude)
-    north: number        // Northern boundary (latitude)
-  }
+const windData: WindData = {
+  u: { array: uValues },
+  v: { array: vValues },
+  width,
+  height,
+  latIsAscending: true,
+  bounds: { west: -50, south: -20, east: 10, north: 20 }
 };
 
-// Create wind layer with options
 const windLayer = new WindLayer(viewer, windData, {
-  particlesTextureSize: 100,            // Size of the particle texture. Determines the maximum number of particles (size squared).
-  particleHeight: 1000,                 // Height of particles above ground
-  lineWidth: { min: 1, max: 2 },        // Width of particle trails
-  lineLength: { min: 20, max: 100 },    // Length range of particle trails
-  speedFactor: 1.0,                     // Speed multiplier
-  dropRate: 0.003,                      // Rate at which particles are dropped
-  dropRateBump: 0.001,                  // Additional drop rate for slow particles
-  colors: ['white'],                    // Colors for particles
-  flipY: false,                         // Flip Y coordinates if needed
-  domain: undefined,                    // Optional: domain for speed
-  displayRange: undefined,              // Optional: display range for speed
-  dynamic: true,                        // Whether to enable dynamic particle animation
+  particlesTextureSize: 100,
+  particleHeight: 1000,
+  lineWidth: { min: 1, max: 2 },
+  lineLength: { min: 20, max: 100 },
+  speedFactor: 1,
+  colors: ['white']
 });
 ```
 
-## 📖 API Reference
+If `speed` is omitted, the layer calculates it from U and V.
 
-### WindLayer
+## Velocity cubes
 
-Main class for wind visualization.
+A single `WindLayer` can render a complete velocity cube. U and V use elevation-major, row-major layout:
 
-#### Constructor Options
+```text
+[elevation][latitude][longitude]
+index = elevationIndex * width * height + latitudeIndex * width + longitudeIndex
+```
+
+Each component array must contain exactly `width * height * depth` values. The `elevations` array must contain `depth` finite coordinate values.
 
 ```typescript
-interface WindLayerOptions {
-  particlesTextureSize: number;              // Size of the particle texture. Determines the maximum number of particles (size squared). Default is 100.
-  particleHeight: number;                    // Height of particles above the ground in meters. Default is 0.
-  lineWidth: { min: number; max: number };   // Width range of particle trails in pixels. Default is { min: 1, max: 2 }.
-  lineLength: { min: number; max: number };  // Length range of particle trails. Default is { min: 20, max: 100 }.
-  speedFactor: number;                       // Factor to adjust the speed of particles. Default is 1.0.
-  dropRate: number;                          // Rate at which particles are dropped (reset). Default is 0.003.
-  dropRateBump: number;                      // Additional drop rate for slow-moving particles. Default is 0.001.
-  colors: string[];                          // Array of colors for particles. Can be used to create color gradients. Default is ['white'].
-  flipY: boolean;                            // Whether to flip the Y-axis of the wind data. Default is false.
-  useViewerBounds: boolean;                  // Whether to use the viewer bounds to generate particles. Default is false.
-  minVisibleRatio: number;                   // Minimum zoom scale retained for width, length, and speed. Default is 0.6; use 1 to disable zoom scaling.
-  domain?: {                                 // Controls the speed rendering range. Default is undefined.
-    min?: number;                            // Minimum speed value for rendering
-    max?: number;                            // Maximum speed value for rendering
-  };
-  displayRange?: {                           // Controls the speed display range for visualization. Default is undefined.
-    min?: number;                            // Minimum speed value for display
-    max?: number;                            // Maximum speed value for display
-  };
-  dynamic: boolean;                          // Whether to enable dynamic particle animation. Default is true.
+import { WindLayer, type WindCubeData } from 'cube-cesium-wind-layer';
+
+const windCube: WindCubeData = {
+  u: { array: uCube },
+  v: { array: vCube },
+  width,
+  height,
+  depth: elevations.length,
+  elevations,
+  latIsAscending: true,
+  elevationIsAscending: elevations[0] < elevations[elevations.length - 1],
+  bounds: { west: -50, south: -20, east: 10, north: 20 }
+};
+
+const windLayer = new WindLayer(viewer, windCube, {
+  particlesTextureSize: 100,
+  verticalExaggeration: 1000,
+  belowSeaLevel: true,
+  elevationStep: 1
+});
+```
+
+The cube is packed into GPU texture atlases and rendered by one particle system. Particles are distributed deterministically among enabled levels so that small particle textures do not accidentally leave levels empty.
+
+### Elevation placement
+
+- With `belowSeaLevel: false`, height is `elevation * verticalExaggeration`.
+- With `belowSeaLevel: true`, height is `-(maximumElevation - elevation) * verticalExaggeration`. This places the largest coordinate at sea level and the remaining coordinates below it.
+- `elevationIsAscending` describes the order of the cube axis. When omitted, it is inferred from the first and last elevation values.
+- `elevationStep` renders every nth level. It must be a positive integer.
+
+The supplied coordinate values determine spacing between rendered levels; levels are not forced to equal spacing.
+
+### Particle density
+
+For a cube, `particlesTextureSize` is the baseline texture dimension for one enabled elevation. The effective texture dimension is:
+
+```text
+ceil(particlesTextureSize * sqrt(ceil(depth / elevationStep)))
+```
+
+This keeps the approximate particle count per enabled level constant. The resulting texture must not exceed the WebGL context's maximum texture size; the constructor and relevant updates throw a `RangeError` when it does.
+
+## Coordinate orientation
+
+`latIsAscending` describes the data, whereas `flipY` describes an internal texture operation. Prefer `latIsAscending` for both 2D fields and cubes:
+
+- `true`: latitude rows run south to north.
+- `false`: latitude rows run north to south.
+- omitted: legacy defaults apply.
+
+`flipY` remains available only for backward compatibility with 2D integrations. It is deprecated and ignored for cubes, where orientation is derived from `latIsAscending`. `elevationIsAscending` is independent of latitude orientation and describes only the ordering of cube levels.
+
+## API reference
+
+### Data types
+
+```typescript
+interface WindData {
+  u: { array: Float32Array; min?: number; max?: number };
+  v: { array: Float32Array; min?: number; max?: number };
+  speed?: { array: Float32Array; min?: number; max?: number };
+  width: number;
+  height: number;
+  bounds: { west: number; south: number; east: number; north: number };
+  latIsAscending?: boolean;
+}
+
+interface WindCubeData extends WindData {
+  depth: number;
+  elevations: ArrayLike<number>;
+  elevationIsAscending?: boolean;
 }
 ```
 
-#### Methods
+### Options
+
+| Option | Default | Description |
+|---|---:|---|
+| `particlesTextureSize` | `100` | 2D texture dimension, or per-level baseline for a cube. Approximate particle count is the effective size squared. |
+| `particleHeight` | `1000` | Height in metres for a 2D field. |
+| `verticalExaggeration` | `1` | Multiplier applied to cube elevation coordinates. Must be greater than zero. |
+| `belowSeaLevel` | `false` | Interpret cube coordinates as levels extending downwards from the maximum coordinate. |
+| `elevationStep` | `1` | Populate every nth cube level. Must be a positive integer. |
+| `lineWidth` | `{ min: 1, max: 2 }` | Particle trail width range in pixels. |
+| `lineLength` | `{ min: 20, max: 100 }` | Particle trail length range. |
+| `speedFactor` | `1` | Particle movement speed multiplier. |
+| `dropRate` | `0.003` | Base probability of resetting a particle. |
+| `dropRateBump` | `0.01` | Additional reset probability based on velocity. |
+| `colors` | `['white']` | Particle color ramp. |
+| `domain` | `undefined` | Optional `{ min, max }` speed rendering domain. |
+| `displayRange` | `undefined` | Optional `{ min, max }` visible speed range. |
+| `useViewerBounds` | `false` | Generate particles within the current viewer bounds. |
+| `minVisibleRatio` | `0.6` | Minimum camera-driven scale for width, trail length, and speed; use `1` to disable scaling. |
+| `dynamic` | `true` | Enable particle animation. |
+| `flipY` | `false` | Deprecated 2D-only texture orientation override. |
+
+### Methods
 
 | Method | Description |
-|--------|-------------|
-| `add()` | Add the wind layer to the scene |
-| `remove()` | Remove the wind layer from the scene |
-| `show: boolean` | Get or set the visibility of the wind layer |
-| `updateWindData(data: WindData)` | Update the wind field data |
-| `updateOptions(options: Partial<WindLayerOptions>)` | Update the options of the wind layer |
-| `getDataAtLonLat(lon: number, lat: number): WindDataAtLonLat \| null` | Get the wind data at a specific longitude and latitude, returns both original and interpolated values. Returns null if coordinates are outside bounds |
-| `zoomTo(duration?: number)` | Zoom the camera to fit the wind field extent |
-| `isDestroyed(): boolean` | Check if the wind layer has been destroyed |
-| `destroy()` | Clean up resources and destroy the wind layer |
+|---|---|
+| `add()` | Add the particle primitives to the scene. |
+| `remove()` | Remove the particle primitives from the scene without destroying the layer. |
+| `show: boolean` | Get or set visibility. |
+| `updateWindData(data)` | Replace the current 2D field or complete cube and rebuild the required GPU resources. |
+| `updateOptions(options)` | Merge new options and rebuild resources affected by density or elevation placement changes. |
+| `getDataAtLonLat(lon, lat, elevationIndex?)` | Interpolate U, V, and speed at a position. The elevation index defaults to `0` and is validated against cube depth. |
+| `zoomTo(duration?)` | Fit the camera to the horizontal data extent. |
+| `isDestroyed()` | Report whether the layer has been destroyed. |
+| `destroy()` | Remove primitives, event listeners, and GPU resources. |
 
-## 🔧 Troubleshooting
+When changing `particlesTextureSize` on a cube, pass the desired per-level baseline. Changing `elevationStep` recalculates the effective particle texture size. Changing `verticalExaggeration`, `belowSeaLevel`, or `particleHeight` recalculates particle heights.
 
-### `DeveloperError: Width must be less than or equal to the maximum texture size (0)`
+## Validation errors
 
-This error is caused by multiple versions of `@cesium/engine` being bundled simultaneously. It can happen when a version of `cesium` ships `@cesium/engine@X` but its internal `@cesium/widgets` package requires `@cesium/engine@X+1`, causing Vite to bundle both and create two separate `ContextLimits` singletons.
+The layer rejects invalid data early. Common causes include mismatched U/V lengths, non-positive dimensions, an elevation count different from `depth`, non-finite elevation coordinates, an invalid `elevationStep`, or an effective particle texture larger than the GPU limit.
 
-**Fix for Vite users** — add the following to your `vite.config.ts`:
+## Fork lineage and license
 
-```ts
-import path from 'path';
-import { realpathSync } from 'fs';
+- Original project: [hongfaqiu/cesium-wind-layer](https://github.com/hongfaqiu/cesium-wind-layer)
+- NOC-OI fork: [NOC-OI/cesium-wind-layer](https://github.com/NOC-OI/cesium-wind-layer)
+- Package license: [MIT](/LICENSE)
 
-const cesiumEngineAlias = path.resolve(
-  realpathSync(path.resolve(__dirname, 'node_modules/cesium')),
-  '../@cesium/engine'
-);
+Copyright and attribution from the original project remain governed by the repository's MIT license. NOC-OI maintains the fork-specific changes described above.
 
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@cesium/engine': cesiumEngineAlias,
-    },
-    dedupe: ['cesium', '@cesium/engine', '@cesium/widgets'],
-  },
-});
-```
+## Acknowledgements
 
-This forces all `@cesium/engine` imports — including those from `@cesium/widgets` — to resolve to the same physical instance that `cesium` itself uses.
-
-## 🎥 Demo
-
-https://github.com/user-attachments/assets/64be8661-a080-4318-8b17-4931670570f1
-
-You can also try the [online demo](https://cesium-wind-layer.opendde.com/) or check out the [example code](../../example).
-
-
-## 📄 License
-
-[MIT](/LICENSE)
+This work is part of the [Atlantis project](https://atlantis.ac.uk/), a UK initiative supporting long-term ocean observations and marine science in the Atlantic. The project is led by the [National Oceanography Centre (NOC)](https://noc.ac.uk/).

@@ -1,5 +1,5 @@
-import { PixelDatatype, PixelFormat, Sampler, Texture, TextureMagnificationFilter, TextureMinificationFilter, Cartesian2, FrameRateMonitor } from 'cesium';
-import { WindLayerOptions, WindData } from './types';
+import { PixelDatatype, PixelFormat, Sampler, Texture, TextureMagnificationFilter, TextureMinificationFilter, Cartesian2, Cartesian3, FrameRateMonitor } from 'cesium';
+import { WindLayerOptions, ProcessedWindData } from './types';
 import { ShaderManager } from './shaderManager';
 import CustomPrimitive from './customPrimitive'
 import { deepMerge } from './utils';
@@ -11,6 +11,7 @@ export class WindParticlesComputing {
   windTextures!: {
     U: Texture;
     V: Texture;
+    elevation: Texture;
   };
   particlesTextures!: {
     previousParticlesPosition: Texture;
@@ -24,12 +25,13 @@ export class WindParticlesComputing {
     updatePosition: CustomPrimitive;
     postProcessingPosition: CustomPrimitive;
   };
-  windData: Required<WindData>;
+  windData: ProcessedWindData;
+  private atlas = { columns: 1, rows: 1, width: 1, height: 1 };
   private frameRateMonitor: FrameRateMonitor;
   frameRate: number = 60;
   frameRateAdjustment: number = 1;
 
-  constructor(context: any, windData: Required<WindData>, options: WindLayerOptions, viewerParameters: any, scene: any) {
+  constructor(context: any, windData: ProcessedWindData, options: WindLayerOptions, viewerParameters: any, scene: any) {
     this.context = context;
     this.options = options;
     this.viewerParameters = viewerParameters;
@@ -79,32 +81,82 @@ export class WindParticlesComputing {
   }
 
   createWindTextures() {
+    const maxTextureSize = this.context.maximumTextureSize ?? 16384;
+    const columns = Math.min(this.windData.depth, Math.floor(maxTextureSize / this.windData.width));
+    const rows = Math.ceil(this.windData.depth / columns);
+    const atlasWidth = this.windData.width * columns;
+    const atlasHeight = this.windData.height * rows;
+    if (columns < 1 || atlasHeight > maxTextureSize || this.windData.depth > maxTextureSize) {
+      throw new RangeError(`Wind cube cannot fit in a ${maxTextureSize}px GPU texture atlas`);
+    }
+    this.atlas = { columns, rows, width: atlasWidth, height: atlasHeight };
+    console.info('[WindLayer] GPU cube textures', {
+      maximumTextureSize: maxTextureSize,
+      atlas: this.atlas,
+      sourceDimensions: {
+        width: this.windData.width,
+        height: this.windData.height,
+        depth: this.windData.depth
+      },
+      effectiveFlipY: this.options.flipY,
+      elevationTextureWidth: this.windData.depth,
+      particleHeights: Array.from(this.windData.particleHeights)
+    });
+    const pack = (source: Float32Array): Float32Array => {
+      const result = new Float32Array(atlasWidth * atlasHeight);
+      const sliceSize = this.windData.width * this.windData.height;
+      for (let level = 0; level < this.windData.depth; level++) {
+        const atlasColumn = level % columns;
+        const atlasRow = Math.floor(level / columns);
+        for (let y = 0; y < this.windData.height; y++) {
+          const sourceY = this.options.flipY ? this.windData.height - 1 - y : y;
+          const sourceOffset = level * sliceSize + sourceY * this.windData.width;
+          const targetOffset = (atlasRow * this.windData.height + y) * atlasWidth + atlasColumn * this.windData.width;
+          result.set(source.subarray(sourceOffset, sourceOffset + this.windData.width), targetOffset);
+        }
+      }
+      return result;
+    };
     const options = {
       context: this.context,
-      width: this.windData.width,
-      height: this.windData.height,
+      width: atlasWidth,
+      height: atlasHeight,
       pixelFormat: PixelFormat.RED,
       pixelDatatype: PixelDatatype.FLOAT,
-      flipY: this.options.flipY ?? false,
+      flipY: false,
       sampler: new Sampler({
         minificationFilter: TextureMinificationFilter.LINEAR,
         magnificationFilter: TextureMagnificationFilter.LINEAR
       })
     }
+    const packedU = pack(this.windData.u.array);
+    const packedV = pack(this.windData.v.array);
 
     this.windTextures = {
       U: new Texture({
         ...options,
         source: {
-          arrayBufferView: new Float32Array(this.windData.u.array)
+          arrayBufferView: packedU
         }
       }),
       V: new Texture({
         ...options,
         source: {
-          arrayBufferView: new Float32Array(this.windData.v.array)
+          arrayBufferView: packedV
         }
       }),
+      elevation: new Texture({
+        context: this.context,
+        width: this.windData.depth,
+        height: 1,
+        pixelFormat: PixelFormat.RED,
+        pixelDatatype: PixelDatatype.FLOAT,
+        sampler: new Sampler({
+          minificationFilter: TextureMinificationFilter.NEAREST,
+          magnificationFilter: TextureMagnificationFilter.NEAREST
+        }),
+        source: { arrayBufferView: this.windData.particleHeights }
+      })
     };
   }
 
@@ -145,6 +197,7 @@ export class WindParticlesComputing {
         uniformMap: {
           U: () => this.windTextures.U,
           V: () => this.windTextures.V,
+          elevation: () => this.windTextures.elevation,
           uRange: () => new Cartesian2(this.windData.u.min, this.windData.u.max),
           vRange: () => new Cartesian2(this.windData.v.min, this.windData.v.max),
           speedRange: () => new Cartesian2(this.windData.speed.min, this.windData.speed.max),
@@ -153,7 +206,9 @@ export class WindParticlesComputing {
             return (this.viewerParameters.pixelSize + 50) * this.options.speedFactor;
           },
           frameRateAdjustment: () => this.frameRateAdjustment,
-          dimension: () => new Cartesian2(this.windData.width, this.windData.height),
+          dimension: () => new Cartesian3(this.windData.width, this.windData.height, this.windData.depth),
+          atlasDimension: () => new Cartesian2(this.atlas.width, this.atlas.height),
+          atlasGrid: () => new Cartesian2(this.atlas.columns, this.atlas.rows),
           minimum: () => new Cartesian2(this.windData.bounds.west, this.windData.bounds.south),
           maximum: () => new Cartesian2(this.windData.bounds.east, this.windData.bounds.north),
         },
@@ -201,7 +256,9 @@ export class WindParticlesComputing {
           },
           dropRate: () => this.options.dropRate,
           dropRateBump: () => this.options.dropRateBump,
-          useViewerBounds: () => this.options.useViewerBounds
+          useViewerBounds: () => this.options.useViewerBounds,
+          depth: () => this.windData.depth,
+          elevationStep: () => this.options.elevationStep
         },
         fragmentShaderSource: ShaderManager.getPostProcessingPositionShader(),
         outputTexture: this.particlesTextures.postProcessingPosition,
@@ -216,12 +273,11 @@ export class WindParticlesComputing {
   }
 
   private reCreateWindTextures() {
-    this.windTextures.U.destroy();
-    this.windTextures.V.destroy();
+    Object.values(this.windTextures).forEach(texture => texture.destroy());
     this.createWindTextures();
   }
 
-  updateWindData(data: Required<WindData>) {
+  updateWindData(data: ProcessedWindData) {
     this.windData = data;
     this.reCreateWindTextures();
   }
@@ -257,7 +313,6 @@ export class WindParticlesComputing {
       const value = array[i] / maxNum; // Normalize to [-1, 1]
       result[i] = value;
     }
-    console.log(result)
     return result;
   }
 

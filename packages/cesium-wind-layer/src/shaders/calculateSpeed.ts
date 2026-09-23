@@ -3,12 +3,14 @@ export const calculateSpeedShader = /*glsl*/`#version 300 es
 // the size of UV textures: width = lon, height = lat
 uniform sampler2D U; // eastward wind
 uniform sampler2D V; // northward wind
-uniform sampler2D currentParticlesPosition; // (lon, lat, lev)
+uniform sampler2D currentParticlesPosition; // (lon, lat, normalized elevation, reset flag)
 
 uniform vec2 uRange; // (min, max)
 uniform vec2 vRange; // (min, max)
 uniform vec2 speedRange; // (min, max)
-uniform vec2 dimension; // (lon, lat)
+uniform vec3 dimension; // (lon, lat, elevation)
+uniform vec2 atlasDimension;
+uniform vec2 atlasGrid;
 uniform vec2 minimum; // minimum of each dimension
 uniform vec2 maximum; // maximum of each dimension
 
@@ -17,55 +19,56 @@ uniform float frameRateAdjustment;
 
 in vec2 v_textureCoordinates;
 
-vec2 getInterval(vec2 maximum, vec2 minimum, vec2 dimension) {
-    return (maximum - minimum) / (dimension - 1.0);
+vec2 getInterval(vec2 maximum, vec2 minimum, vec2 gridDimension) {
+    return (maximum - minimum) / (gridDimension - 1.0);
 }
 
-vec2 mapPositionToNormalizedIndex2D(vec2 lonLat) {
+vec2 mapPositionToAtlasUV(vec3 position) {
+    vec2 lonLat = position.xy;
     // ensure the range of longitude and latitude
     lonLat.x = clamp(lonLat.x, minimum.x, maximum.x);
     lonLat.y = clamp(lonLat.y,  minimum.y, maximum.y);
 
-    vec2 interval = getInterval(maximum, minimum, dimension);
+    vec2 interval = getInterval(maximum, minimum, dimension.xy);
     
     vec2 index2D = vec2(0.0);
     index2D.x = (lonLat.x - minimum.x) / interval.x;
     index2D.y = (lonLat.y - minimum.y) / interval.y;
 
-    vec2 normalizedIndex2D = vec2(index2D.x / dimension.x, index2D.y / dimension.y);
-    return normalizedIndex2D;
+    float level = dimension.z <= 1.0 ? 0.0 : floor(clamp(position.z, 0.0, 1.0) * (dimension.z - 1.0) + 0.5);
+    float atlasColumn = mod(level, atlasGrid.x);
+    float atlasRow = floor(level / atlasGrid.x);
+    vec2 atlasPixel = vec2(
+      atlasColumn * dimension.x + index2D.x + 0.5,
+      atlasRow * dimension.y + index2D.y + 0.5
+    );
+    return atlasPixel / atlasDimension;
 }
 
-float getWindComponent(sampler2D componentTexture, vec2 lonLat) {
-    vec2 normalizedIndex2D = mapPositionToNormalizedIndex2D(lonLat);
-    float result = texture(componentTexture, normalizedIndex2D).r;
-    return result;
-}
-
-vec2 getWindComponents(vec2 lonLat) {
-    vec2 normalizedIndex2D = mapPositionToNormalizedIndex2D(lonLat);
-    float u = texture(U, normalizedIndex2D).r;
-    float v = texture(V, normalizedIndex2D).r;
+vec2 getWindComponents(vec3 position) {
+    vec2 atlasUV = mapPositionToAtlasUV(position);
+    float u = texture(U, atlasUV).r;
+    float v = texture(V, atlasUV).r;
     return vec2(u, v);
 }
 
-vec2 bilinearInterpolation(vec2 lonLat) {
-    float lon = lonLat.x;
-    float lat = lonLat.y;
+vec2 bilinearInterpolation(vec3 position) {
+    float lon = position.x;
+    float lat = position.y;
 
-    vec2 interval = getInterval(maximum, minimum, dimension);
+    vec2 interval = getInterval(maximum, minimum, dimension.xy);
 
     // Calculate grid cell coordinates
-    float lon0 = floor(lon / interval.x) * interval.x;
+    float lon0 = floor((lon - minimum.x) / interval.x) * interval.x + minimum.x;
     float lon1 = lon0 + interval.x;
-    float lat0 = floor(lat / interval.y) * interval.y;
+    float lat0 = floor((lat - minimum.y) / interval.y) * interval.y + minimum.y;
     float lat1 = lat0 + interval.y;
 
     // Get wind vectors at four corners
-    vec2 v00 = getWindComponents(vec2(lon0, lat0));
-    vec2 v10 = getWindComponents(vec2(lon1, lat0));
-    vec2 v01 = getWindComponents(vec2(lon0, lat1));
-    vec2 v11 = getWindComponents(vec2(lon1, lat1));
+    vec2 v00 = getWindComponents(vec3(lon0, lat0, position.z));
+    vec2 v10 = getWindComponents(vec3(lon1, lat0, position.z));
+    vec2 v01 = getWindComponents(vec3(lon0, lat1, position.z));
+    vec2 v11 = getWindComponents(vec3(lon1, lat1, position.z));
 
     // Check if all wind vectors are zero
     if (length(v00) == 0.0 && length(v10) == 0.0 && length(v01) == 0.0 && length(v11) == 0.0) {
@@ -112,14 +115,14 @@ vec2 convertSpeedUnitToLonLat(vec2 lonLat, vec2 speed) {
     return windVectorInLonLat;
 }
 
-vec2 calculateSpeedByRungeKutta2(vec2 lonLat) {
+vec2 calculateSpeedByRungeKutta2(vec3 position) {
     // see https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods#Second-order_methods_with_two_stages for detail
     const float h = 0.5;
 
-    vec2 y_n = lonLat;
-    vec2 f_n = bilinearInterpolation(lonLat);
+    vec2 y_n = position.xy;
+    vec2 f_n = bilinearInterpolation(position);
     vec2 midpoint = y_n + 0.5 * h * convertSpeedUnitToLonLat(y_n, f_n) * speedScaleFactor;
-    vec2 speed = h * bilinearInterpolation(midpoint) * speedScaleFactor;
+    vec2 speed = h * bilinearInterpolation(vec3(midpoint, position.z)) * speedScaleFactor;
 
     return speed;
 }
@@ -141,10 +144,10 @@ out vec4 fragColor;
 
 void main() {
     // texture coordinate must be normalized
-    vec2 lonLat = texture(currentParticlesPosition, v_textureCoordinates).rg;
-    vec2 speedOrigin = bilinearInterpolation(lonLat);
-    vec2 speed = calculateSpeedByRungeKutta2(lonLat) * frameRateAdjustment;
-    vec2 speedInLonLat = convertSpeedUnitToLonLat(lonLat, speed);
+    vec3 position = texture(currentParticlesPosition, v_textureCoordinates).rgb;
+    vec2 speedOrigin = bilinearInterpolation(position);
+    vec2 speed = calculateSpeedByRungeKutta2(position) * frameRateAdjustment;
+    vec2 speedInLonLat = convertSpeedUnitToLonLat(position.xy, speed);
 
     fragColor = vec4(speedInLonLat, calculateWindNorm(speedOrigin));
 }

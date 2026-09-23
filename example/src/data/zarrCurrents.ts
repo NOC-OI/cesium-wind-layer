@@ -1,4 +1,4 @@
-import type { WindData } from 'cesium-wind-layer';
+import type { WindData } from 'cube-cesium-wind-layer';
 import * as zarr from 'zarrita';
 
 const CURRENT_URLS = {

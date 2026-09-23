@@ -2,15 +2,17 @@ import { Cartesian3 } from 'cesium';
 
 export interface WindLayerOptions {
   /**
-   * Size of the particle texture. Determines the maximum number of particles (size squared). Default is 100.
+   * Size of the particle texture for one elevation. For cubes, the texture is
+   * scaled by the square root of the active elevation count so each level
+   * retains approximately this many particles (size squared). Default is 100.
    */
   particlesTextureSize: number;
   /**
-   * Height of particles above the ground in meters. Default is 0.
+   * Height of particles above the ground in meters. Default is 1000.
    */
   particleHeight: number;
   /**
-   * Width range of particle trails in pixels. Default is { min: 1, max: 5 }.
+   * Width range of particle trails in pixels. Default is { min: 1, max: 2 }.
    * Controls the width of the particles.
    * @property {number} min - Minimum width of particle trails
    * @property {number} max - Maximum width of particle trails
@@ -39,14 +41,21 @@ export interface WindLayerOptions {
    */
   dropRate: number;
   /**
-   * Additional drop rate for slow-moving particles. Default is 0.001.
+   * Additional drop rate for slow-moving particles. Default is 0.01.
    * Increases the probability of dropping particles when they move slowly.
    */
   dropRateBump: number;
   /**
    * Whether to flip the Y-axis of the wind data. Default is false.
+   * @deprecated Prefer `WindData.latIsAscending`; this remains as a low-level compatibility override.
    */
   flipY: boolean;
+  /** Scale applied to cube elevation coordinates. Default is 1. */
+  verticalExaggeration: number;
+  /** Interpret cube elevation coordinates as depths below sea level. Default is false. */
+  belowSeaLevel: boolean;
+  /** Interval between elevation levels populated with particles. Default is 1. */
+  elevationStep: number;
   /**
    * Array of colors for particles. Can be used to create color gradients.
    * Default is ['white'].
@@ -98,12 +107,30 @@ export interface WindData {
   speed?: WindDataDemention;
   width: number;
   height: number;
+  /** True when array rows progress from south to north. */
+  latIsAscending?: boolean;
   bounds: {
     west: number;
     south: number;
     east: number;
     north: number;
   };
+}
+
+/** A velocity cube flattened in elevation-latitude-longitude order. */
+export interface WindCubeData extends WindData {
+  depth: number;
+  elevations: ArrayLike<number>;
+  /** True when elevation indices progress from lower to higher coordinate values. */
+  elevationIsAscending?: boolean;
+}
+
+export type WindFieldData = WindData | WindCubeData;
+
+/** Wind data after validation and derived speed/height calculation. */
+export interface ProcessedWindData extends WindCubeData {
+  speed: WindDataDemention;
+  particleHeights: Float32Array;
 }
 
 export interface Particle {

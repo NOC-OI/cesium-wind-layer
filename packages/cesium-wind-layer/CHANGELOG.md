@@ -1,4 +1,22 @@
-# cesium-wind-layer
+# cube-cesium-wind-layer
+
+## 0.12.0
+
+### Minor Changes
+
+- Add complete velocity-cube rendering to the NOC-OI fork
+  - Accept elevation-major `WindCubeData` in a single `WindLayer`
+  - Place particles using supplied elevation coordinates, with optional vertical exaggeration and below-sea-level rendering
+  - Support semantic `latIsAscending` and `elevationIsAscending` axis metadata
+  - Preserve approximate per-level particle density and sample levels with `elevationStep`
+  - Query a selected cube level with `getDataAtLonLat`
+
+### Patch Changes
+
+- Validate cube dimensions, component lengths, elevation coordinates, option ranges, and GPU texture limits
+- Rebuild affected particle resources when cube data or elevation-related options change
+- Remove registered camera, morph, and resize listeners when the layer is destroyed
+- Document that this repository is an NOC-OI-maintained fork of `hongfaqiu/cesium-wind-layer`
 
 ## 0.11.1
 

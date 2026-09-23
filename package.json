@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev",
-    "dev:all": "pnpm --filter cesium-wind-layer dev & pnpm --filter example dev",
+    "dev:all": "pnpm --filter cube-cesium-wind-layer dev & pnpm --filter example dev",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",

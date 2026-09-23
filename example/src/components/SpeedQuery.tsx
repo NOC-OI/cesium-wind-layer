@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Typography, Space, Button } from 'antd';
 import styled from 'styled-components';
-import { WindDataAtLonLat, WindLayer } from 'cesium-wind-layer';
+import { WindDataAtLonLat, WindLayer } from 'cube-cesium-wind-layer';
 import { Viewer, ScreenSpaceEventHandler, ScreenSpaceEventType, Cartographic, Math as CesiumMath } from 'cesium';
 import { GithubOutlined } from '@ant-design/icons';
 
@@ -289,15 +289,15 @@ export const SpeedQuery: React.FC<SpeedQueryProps> = ({ windLayer, viewer }) => 
       </QueryInfo>
 
       <GithubLink
-        href="https://github.com/hongfaqiu/cesium-wind-layer"
+        href="https://github.com/NOC-OI/cesium-wind-layer"
         target="_blank"
         rel="noopener noreferrer"
       >
         <GithubOutlined style={{ fontSize: '14px' }} />
-        <span>cesium-wind-layer</span>
+        <span>cube-cesium-wind-layer</span>
         <div className="stats">
           <img 
-            src="https://img.shields.io/github/stars/hongfaqiu/cesium-wind-layer?style=flat&logo=github"
+            src="https://img.shields.io/github/stars/NOC-OI/cesium-wind-layer?style=flat&logo=github"
             alt="GitHub stars" 
           />
         </div>

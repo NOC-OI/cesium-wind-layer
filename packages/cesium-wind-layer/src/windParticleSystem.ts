@@ -1,4 +1,4 @@
-import { WindLayerOptions, WindData } from './types';
+import { WindLayerOptions, ProcessedWindData } from './types';
 import { WindParticlesComputing } from './windParticlesComputing';
 import { WindParticlesRendering } from './windParticlesRendering';
 import CustomPrimitive from './customPrimitive';
@@ -11,7 +11,7 @@ export class WindParticleSystem {
   options: WindLayerOptions;
   viewerParameters: any;
   context: any;
-  constructor(context: any, windData: Required<WindData>, options: WindLayerOptions, viewerParameters: any, scene: any) {
+  constructor(context: any, windData: ProcessedWindData, options: WindLayerOptions, viewerParameters: any, scene: any) {
     this.context = context;
     this.options = options;
     this.viewerParameters = viewerParameters;

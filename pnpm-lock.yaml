@@ -50,7 +50,7 @@ importers:
       cesium:
         specifier: ^1.136.0
         version: 1.140.0
-      cesium-wind-layer:
+      cube-cesium-wind-layer:
         specifier: workspace:*
         version: link:../packages/cesium-wind-layer
       d3-scale-chromatic:

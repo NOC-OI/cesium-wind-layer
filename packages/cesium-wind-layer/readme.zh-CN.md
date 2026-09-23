@@ -1,9 +1,11 @@
-# Cesium Wind Layer
+# Cube Cesium Wind Layer
 
-[![npm version](https://img.shields.io/npm/v/cesium-wind-layer.svg)](https://www.npmjs.com/package/cesium-wind-layer)
-[![license](https://img.shields.io/npm/l/cesium-wind-layer.svg)](https://github.com/your-repo/cesium-wind-layer/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/cube-cesium-wind-layer.svg)](https://www.npmjs.com/package/cube-cesium-wind-layer)
+[![license](https://img.shields.io/npm/l/cube-cesium-wind-layer.svg)](https://github.com/NOC-OI/cesium-wind-layer/blob/main/LICENSE)
 
 一个GPU加速的用于通过粒子动画可视化风场数据的 Cesium 插件。
+
+> `cube-cesium-wind-layer` 是 NOC-OI 维护的分支，原项目为 [hongfaqiu/cesium-wind-layer](https://github.com/hongfaqiu/cesium-wind-layer)。本分支保留 MIT 许可证和原项目署名，并增加三维速度立方体等功能。
 
 [English](/packages/cesium-wind-layer/readme.md) | [在线演示](https://cesium-wind-layer.opendde.com/)
 
@@ -29,7 +31,7 @@
 ## 📦 安装
 
 ```bash
-pnpm add cesium-wind-layer
+pnpm add cube-cesium-wind-layer
 ```
 
 ## 🚀 使用方法
@@ -38,7 +40,7 @@ pnpm add cesium-wind-layer
 
 ```typescript
 import { Viewer } from 'cesium';
-import { WindLayer } from 'cesium-wind-layer';
+import { WindLayer } from 'cube-cesium-wind-layer';
 
 // 创建 Cesium viewer
 const viewer = new Viewer('cesiumContainer');
