@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Viewer, Rectangle, ArcGisMapServerImageryProvider, ImageryLayer, Ion, CesiumTerrainProvider } from 'cesium';
-import { WindLayer, WindLayerOptions } from 'cube-cesium-wind-layer';
+import { WindLayer, WindLayerOptions, type WindCubeData, type WindData } from 'cube-cesium-wind-layer';
 import { ControlPanel } from '@/components/ControlPanel';
 import styled from 'styled-components';
 import { colorSchemes } from '@/components/ColorTableInput';
 import { SpeedQuery } from '@/components/SpeedQuery';
-import { loadGlobalZarrCurrents } from '@/data/zarrCurrents';
+import { CUBE_DEPTH_LEVELS, loadGlobalZarrCurrentCube, loadGlobalZarrCurrents } from '@/data/zarrCurrents';
 
 Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhY2IzNzQzNi1iOTVkLTRkZjItOWVkZi1iMGUyYTUxN2Q5YzYiLCJpZCI6NTUwODUsImlhdCI6MTcyNTQyMDE4NX0.yHbHpszFexPrxX6_55y0RgNrHjBQNu9eYkW9cXKUTPk';
 
@@ -59,9 +59,15 @@ const defaultOptions: Partial<WindLayerOptions> = {
 export function Earth() {
   const viewerRef = useRef<Viewer | null>(null);
   const windLayerRef = useRef<WindLayer | null>(null);
-  const [, setIsWindLayerReady] = useState(false);
+  const surfaceDataRef = useRef<WindData | null>(null);
+  const cubeDataRef = useRef<WindCubeData | null>(null);
+  const surfaceParticleTextureSizeRef = useRef(defaultOptions.particlesTextureSize ?? 100);
+  const cubeVerticalExaggerationRef = useRef(1000);
+  const [isWindLayerReady, setIsWindLayerReady] = useState(false);
   const isFirstLoadRef = useRef(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [visualizationMode, setVisualizationMode] = useState<'2d' | '3d'>('2d');
+  const [visualizationLoading, setVisualizationLoading] = useState(false);
   const [options, setOptions] = useState<WindLayerOptions>({
     ...defaultOptions,
     ...currentOptions
@@ -105,6 +111,7 @@ export function Earth() {
     const initWindLayer = async () => {
       try {
         const windData = await loadGlobalZarrCurrents();
+        surfaceDataRef.current = windData;
 
         if (!isComponentMounted || !viewerRef.current) return;
 
@@ -157,6 +164,8 @@ export function Earth() {
     return () => {
       isComponentMounted = false;
       isFirstLoadRef.current = true;
+      surfaceDataRef.current = null;
+      cubeDataRef.current = null;
 
       if (windLayerRef.current) {
         windLayerRef.current.destroy();
@@ -172,23 +181,85 @@ export function Earth() {
   }, []);
 
   const handleOptionsChange = (changedOptions: Partial<WindLayerOptions>) => {
-    setOptions({
-      ...options,
-      ...changedOptions
-    });
+    if (visualizationMode === '3d' && changedOptions.verticalExaggeration !== undefined) {
+      cubeVerticalExaggerationRef.current = changedOptions.verticalExaggeration;
+    }
+    setOptions(current => ({ ...current, ...changedOptions }));
+  };
+
+  const handleVisualizationModeChange = async (mode: '2d' | '3d') => {
+    const layer = windLayerRef.current;
+    if (!layer || mode === visualizationMode || visualizationLoading) return;
+
+    setVisualizationLoading(true);
+    setLoadError(null);
+    try {
+      if (mode === '3d') {
+        const cube = cubeDataRef.current ?? await loadGlobalZarrCurrentCube();
+        cubeDataRef.current = cube;
+        surfaceParticleTextureSizeRef.current = options.particlesTextureSize;
+        // Particle count is texture size squared. Account for the library's
+        // per-level cube scaling so the total cube count is about 1/4 of 2D.
+        const targetCubeTextureSize = Math.max(1, Math.floor(options.particlesTextureSize / 2));
+        const cubeParticleTextureSize = Math.max(
+          1,
+          Math.floor(targetCubeTextureSize / Math.sqrt(CUBE_DEPTH_LEVELS)),
+        );
+        // The real depth spacing is retained; exaggeration makes the shallow
+        // selected depth levels distinguishable at a global camera distance.
+        const cubeOptions = {
+          particlesTextureSize: cubeParticleTextureSize,
+          verticalExaggeration: cubeVerticalExaggerationRef.current,
+          belowSeaLevel: false,
+          elevationStep: 1,
+        };
+        layer.updateOptions(cubeOptions);
+        layer.updateWindData(cube);
+        setOptions(current => ({ ...current, ...cubeOptions }));
+      } else {
+        const surface = surfaceDataRef.current;
+        if (!surface) throw new Error('The surface current data is not available');
+        // Return to 2D before restoring the larger surface texture; otherwise
+        // cube scaling would briefly allocate it once for every depth level.
+        layer.updateWindData(surface);
+        const surfaceOptions = {
+          particlesTextureSize: surfaceParticleTextureSizeRef.current,
+          verticalExaggeration: 1,
+          belowSeaLevel: false,
+          elevationStep: 1,
+        };
+        layer.updateOptions(surfaceOptions);
+        setOptions(current => ({ ...current, ...surfaceOptions }));
+      }
+      setVisualizationMode(mode);
+    } catch (error) {
+      console.error(`Failed to switch to ${mode.toUpperCase()} currents:`, error);
+      setLoadError(error instanceof Error ? error.message : `Unable to load ${mode.toUpperCase()} currents`);
+    } finally {
+      setVisualizationLoading(false);
+    }
   };
 
   return (
     <PageContainer>
       <SpeedQuery windLayer={windLayerRef.current} viewer={viewerRef.current} />
       <CesiumContainer id="cesiumContainer">
-        {!windLayerRef.current && (
-          <LoadingMessage>{loadError ? `Failed to load currents: ${loadError}` : 'Loading global Zarr currents…'}</LoadingMessage>
+        {(!isWindLayerReady || visualizationLoading || loadError) && (
+          <LoadingMessage>
+            {loadError
+              ? `Failed to load currents: ${loadError}`
+              : visualizationLoading
+                ? `Loading the first ${CUBE_DEPTH_LEVELS} depth levels…`
+                : 'Loading global Zarr currents…'}
+          </LoadingMessage>
         )}
         <ControlPanel
           windLayer={windLayerRef.current}
           initialOptions={options}
           onOptionsChange={handleOptionsChange}
+          visualizationMode={visualizationMode}
+          visualizationLoading={visualizationLoading}
+          onVisualizationModeChange={handleVisualizationModeChange}
         />
       </CesiumContainer>
     </PageContainer>

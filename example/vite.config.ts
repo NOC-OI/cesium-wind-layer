@@ -12,6 +12,7 @@ const cesiumRealPath = realpathSync(path.resolve(__dirname, 'node_modules/cesium
 const cesiumEngineAlias = path.resolve(cesiumRealPath, '../@cesium/engine');
 
 export default defineConfig({
+  base: process.env.VITE_BASE_PATH ?? '/',
   plugins: [react(), cesium()],
   resolve: {
     alias: {

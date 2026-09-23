@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Switch, Space, Tooltip, Typography, Form, InputNumber } from 'antd';
+import { Card, Switch, Space, Tooltip, Typography, Form, InputNumber, Segmented } from 'antd';
 import { WindLayer, WindLayerOptions } from 'cube-cesium-wind-layer';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import ColorTableInput from './ColorTableInput';
@@ -7,6 +7,7 @@ import styled from 'styled-components';
 import { ZoomInOutlined } from '@ant-design/icons';
 import { EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
 import NumberInput from './NumberInput';
+import { CUBE_DEPTH_LEVELS } from '@/data/zarrCurrents';
 
 const { Text } = Typography;
 
@@ -190,12 +191,18 @@ interface ControlPanelProps {
   windLayer: WindLayer | null;
   initialOptions?: Partial<WindLayerOptions>;
   onOptionsChange?: (options: Partial<WindLayerOptions>) => void;
+  visualizationMode: '2d' | '3d';
+  visualizationLoading?: boolean;
+  onVisualizationModeChange: (mode: '2d' | '3d') => void;
 }
 
 export const ControlPanel: React.FC<ControlPanelProps> = ({
   windLayer,
   initialOptions,
   onOptionsChange,
+  visualizationMode,
+  visualizationLoading = false,
+  onVisualizationModeChange,
 }) => {
   const [form] = Form.useForm();
   const [options, setOptions] = useState<WindLayerOptions>({
@@ -291,6 +298,54 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
           >
             <Space direction="vertical" style={{ width: '100%' }} size={4}>
               <CompactFormItem
+                label={renderLabel(
+                  'Dataset View',
+                  `Choose a single surface slice or a 3D cube containing the first ${CUBE_DEPTH_LEVELS} physical depth levels.`
+                )}
+                help={
+                  <Text type="secondary" style={{ fontSize: '11px' }}>
+                    {visualizationMode === '3d'
+                      ? `Extruding the first ${CUBE_DEPTH_LEVELS} ocean depth levels above the globe so the complete cube remains visible.`
+                      : 'Rendering currents at the ocean surface only.'}
+                  </Text>
+                }
+              >
+                <Segmented
+                  block
+                  value={visualizationMode}
+                  disabled={!windLayer || visualizationLoading}
+                  options={[
+                    { label: '2D Surface', value: '2d' },
+                    { label: visualizationLoading ? 'Loading cube…' : '3D Depth Cube', value: '3d' },
+                  ]}
+                  onChange={(value) => onVisualizationModeChange(value as '2d' | '3d')}
+                />
+              </CompactFormItem>
+
+              <CompactFormItem
+                name="verticalExaggeration"
+                label={renderLabel(
+                  'Vertical Exaggeration',
+                  'Multiplies the real spacing between depth levels in the above-globe 3D extrusion.'
+                )}
+                help={
+                  visualizationMode === '2d' ? (
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      Available in 3D Depth Cube mode.
+                    </Text>
+                  ) : undefined
+                }
+              >
+                <NumberInput
+                  min={1}
+                  max={10000}
+                  step={100}
+                  precision={0}
+                  disabled={visualizationMode === '2d' || visualizationLoading}
+                />
+              </CompactFormItem>
+
+              <CompactFormItem
                 name="particlesTextureSize"
                 label={renderLabel(
                   'Particles Count',
@@ -298,7 +353,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 )}
                 help={
                   <Text type="secondary" style={{ fontSize: '11px' }}>
-                    Current: {Math.pow(options.particlesTextureSize, 2)} particles
+                    {visualizationMode === '3d'
+                      ? `Current: ~${Math.pow(Math.ceil(options.particlesTextureSize * Math.sqrt(CUBE_DEPTH_LEVELS)), 2).toLocaleString()} particles across ${CUBE_DEPTH_LEVELS} levels`
+                      : `Current: ${Math.pow(options.particlesTextureSize, 2).toLocaleString()} particles`}
                   </Text>
                 }
               >

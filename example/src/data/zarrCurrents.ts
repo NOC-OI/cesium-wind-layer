@@ -1,4 +1,4 @@
-import type { WindData } from 'cube-cesium-wind-layer';
+import type { WindCubeData, WindData } from 'cube-cesium-wind-layer';
 import * as zarr from 'zarrita';
 
 const CURRENT_URLS = {
@@ -7,6 +7,7 @@ const CURRENT_URLS = {
 } as const;
 
 const CURRENT_VARIABLES = { u: 'uo', v: 'vo' } as const;
+export const CUBE_DEPTH_LEVELS = 15;
 
 type NumericArray = ArrayLike<number | bigint>;
 
@@ -32,6 +33,13 @@ async function readCoordinates(url: string) {
   };
 }
 
+async function readDepths(url: string, count: number) {
+  const root = zarr.root(new zarr.FetchStore(url));
+  const depthArray = await zarr.open.v2(root.resolve('z'), { kind: 'array' });
+  const depth = await zarr.get(depthArray, [zarr.slice(0, count)]);
+  return Array.from(depth.data as NumericArray, Number);
+}
+
 function sanitizeAndRotate(
   values: NumericArray,
   width: number,
@@ -53,10 +61,41 @@ function sanitizeAndRotate(
   return output;
 }
 
+function sanitizeAndRotateCube(
+  values: NumericArray,
+  width: number,
+  height: number,
+  depth: number,
+  longitude: number[],
+) {
+  const levelSize = width * height;
+  const output = new Float32Array(levelSize * depth);
+  const pivot = longitude.findIndex(value => value >= 180);
+
+  for (let z = 0; z < depth; z++) {
+    const levelOffset = z * levelSize;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const sourceX = pivot < 0 ? x : (x + pivot) % width;
+        const value = Number(values[levelOffset + y * width + sourceX]);
+        output[levelOffset + y * width + x] = Number.isFinite(value) ? value : 0;
+      }
+    }
+  }
+
+  return output;
+}
+
 async function readSurface(url: string, variable: string) {
   const array = await openV2Array(url, variable);
   // currents_2d_v2 selects the first time and surface elevation from [t, z, y, x].
   const result = await zarr.get(array, [0, 0, null, null]);
+  return result.data as NumericArray;
+}
+
+async function readCube(url: string, variable: string, depth: number) {
+  const array = await openV2Array(url, variable);
+  const result = await zarr.get(array, [0, zarr.slice(0, depth), null, null]);
   return result.data as NumericArray;
 }
 
@@ -75,6 +114,49 @@ export async function loadGlobalZarrCurrents(): Promise<WindData> {
     v: { array: sanitizeAndRotate(v, width, height, longitude), min: -1, max: 1 },
     width,
     height,
+    latIsAscending: latitude[0] < latitude[latitude.length - 1],
+    bounds: {
+      west: -180,
+      south: Math.min(...latitude),
+      east: 180,
+      north: Math.max(...latitude),
+    },
+  };
+}
+
+/** Load the first fifteen depth levels as an elevation-major global velocity cube. */
+export async function loadGlobalZarrCurrentCube(): Promise<WindCubeData> {
+  const [{ longitude, latitude }, depths, u, v] = await Promise.all([
+    readCoordinates(CURRENT_URLS.u),
+    readDepths(CURRENT_URLS.u, CUBE_DEPTH_LEVELS),
+    readCube(CURRENT_URLS.u, CURRENT_VARIABLES.u, CUBE_DEPTH_LEVELS),
+    readCube(CURRENT_URLS.v, CURRENT_VARIABLES.v, CUBE_DEPTH_LEVELS),
+  ]);
+  const width = longitude.length;
+  const height = latitude.length;
+  // The source coordinate is CF positive-down. This example deliberately
+  // extrudes its depth magnitudes above the globe: negative Cesium heights are
+  // occluded by the depth-tested ellipsoid. The real, unequal spacing between
+  // levels is preserved while making the complete cube inspectable.
+  const elevations = depths;
+
+  return {
+    u: {
+      array: sanitizeAndRotateCube(u, width, height, elevations.length, longitude),
+      min: -1,
+      max: 1,
+    },
+    v: {
+      array: sanitizeAndRotateCube(v, width, height, elevations.length, longitude),
+      min: -1,
+      max: 1,
+    },
+    width,
+    height,
+    depth: elevations.length,
+    elevations,
+    latIsAscending: latitude[0] < latitude[latitude.length - 1],
+    elevationIsAscending: elevations[0] < elevations[elevations.length - 1],
     bounds: {
       west: -180,
       south: Math.min(...latitude),

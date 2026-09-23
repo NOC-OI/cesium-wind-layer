@@ -7,7 +7,7 @@ A GPU-accelerated Cesium particle layer for visualizing two-dimensional wind fie
 
 > `cube-cesium-wind-layer` is the npm package for this NOC-OI fork of the original [hongfaqiu/cesium-wind-layer](https://github.com/hongfaqiu/cesium-wind-layer). The original project provides the core GPU particle renderer and Cesium integration. This fork adds velocity-cube rendering, coordinate-orientation metadata, depth/elevation placement, per-level particle density, camera-scale controls, and packaging fixes. These additions are maintained by NOC-OI and should not be understood as upstream features. This repository preserves its MIT license and attribution requirements.
 
-[Upstream documentation](https://github.com/hongfaqiu/cesium-wind-layer/blob/main/packages/cesium-wind-layer/readme.md) | [Upstream live demo](https://cesium-wind-layer.opendde.com/)
+[NOC-OI live demo](https://noc-oi.github.io/cesium-wind-layer/) | [Chinese documentation](./readme.zh-CN.md) | [Upstream project](https://github.com/hongfaqiu/cesium-wind-layer) | [Upstream live demo](https://cesium-wind-layer.opendde.com/)
 
 | Wind Layer | Terrain Occlusion |
 |---|---|

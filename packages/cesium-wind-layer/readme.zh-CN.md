@@ -7,7 +7,7 @@
 
 > `cube-cesium-wind-layer` 是 NOC-OI 维护的分支，原项目为 [hongfaqiu/cesium-wind-layer](https://github.com/hongfaqiu/cesium-wind-layer)。本分支保留 MIT 许可证和原项目署名，并增加三维速度立方体等功能。
 
-[English](/packages/cesium-wind-layer/readme.md) | [在线演示](https://cesium-wind-layer.opendde.com/)
+[English](./readme.md) | [NOC-OI 在线演示](https://noc-oi.github.io/cesium-wind-layer/) | [原项目](https://github.com/hongfaqiu/cesium-wind-layer) | [原项目在线演示](https://cesium-wind-layer.opendde.com/)
 
 | Wind Layer | Terrain Occlusion |
 |-----------------|------------------------|
