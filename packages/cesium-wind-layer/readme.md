@@ -11,7 +11,7 @@ A GPU-accelerated Cesium particle layer for visualizing two-dimensional wind fie
 
 | Wind Layer | Terrain Occlusion |
 |---|---|
-| ![Wind Layer Demo](/pictures/wind.gif) | ![Terrain Occlusion Demo](/pictures/terrain.gif) |
+| ![Wind Layer Demo](https://github.com/NOC-OI/cesium-wind-layer/blob/main/pictures/wind.gif?raw=true) | ![Terrain Occlusion Demo](https://github.com/NOC-OI/cesium-wind-layer/blob/main/pictures/terrain.gif?raw=true) |
 
 ## Features
 
