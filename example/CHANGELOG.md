@@ -1,5 +1,12 @@
 # example
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies
+  - cube-cesium-wind-layer@0.12.1
+
 ## 0.7.1
 
 ### Patch Changes

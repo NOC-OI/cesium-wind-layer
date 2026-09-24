@@ -1,5 +1,11 @@
 # cube-cesium-wind-layer
 
+## 0.12.1
+
+### Patch Changes
+
+- Removing console.info
+
 ## 0.12.0
 
 ### Minor Changes

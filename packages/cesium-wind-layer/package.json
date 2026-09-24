@@ -1,6 +1,6 @@
 {
   "name": "cube-cesium-wind-layer",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "An NOC-OI fork of cesium-wind-layer with 3D velocity-cube visualization.",
   "author": "Hongfa Qiu",
   "contributors": [

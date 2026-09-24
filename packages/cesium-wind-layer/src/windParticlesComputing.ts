@@ -90,18 +90,6 @@ export class WindParticlesComputing {
       throw new RangeError(`Wind cube cannot fit in a ${maxTextureSize}px GPU texture atlas`);
     }
     this.atlas = { columns, rows, width: atlasWidth, height: atlasHeight };
-    console.info('[WindLayer] GPU cube textures', {
-      maximumTextureSize: maxTextureSize,
-      atlas: this.atlas,
-      sourceDimensions: {
-        width: this.windData.width,
-        height: this.windData.height,
-        depth: this.windData.depth
-      },
-      effectiveFlipY: this.options.flipY,
-      elevationTextureWidth: this.windData.depth,
-      particleHeights: Array.from(this.windData.particleHeights)
-    });
     const pack = (source: Float32Array): Float32Array => {
       const result = new Float32Array(atlasWidth * atlasHeight);
       const sliceSize = this.windData.width * this.windData.height;

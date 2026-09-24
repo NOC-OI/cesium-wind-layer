@@ -80,7 +80,7 @@ export class WindLayer {
 
   /**
    * WindLayer class for visualizing wind field data with particle animation in Cesium.
-   * 
+   *
    * @class
    * @param {Viewer} viewer - The Cesium viewer instance.
    * @param {WindFieldData} windData - The 2D wind field or complete velocity cube to visualize.
@@ -200,25 +200,6 @@ export class WindLayer {
         ? -(maximumElevation - elevation) * this.options.verticalExaggeration
         : elevation * this.options.verticalExaggeration
     );
-    console.info('[WindLayer] processed wind cube', {
-      dimensions: { width: windData.width, height: windData.height, depth },
-      expectedLength,
-      uLength: windData.u.array.length,
-      vLength: windData.v.array.length,
-      elevations,
-      particleHeights: Array.from(particleHeights),
-      latIsAscending: windData.latIsAscending,
-      effectiveFlipY: this.options.flipY,
-      elevationIsAscending: 'elevationIsAscending' in windData
-        ? windData.elevationIsAscending
-        : elevations.length < 2 || elevations[0] < elevations[elevations.length - 1],
-      elevationStep: this.options.elevationStep,
-      particleTextureSizePerLevel: this.particleTextureSizePerLevel,
-      effectiveParticleTextureSize: this.options.particlesTextureSize,
-      particleCount: this.options.particlesTextureSize ** 2,
-      particlesPerActiveLevel: (this.options.particlesTextureSize ** 2) /
-        Math.ceil(depth / this.options.elevationStep)
-    });
     return {
       ...windData,
       speed: windData.speed!,
