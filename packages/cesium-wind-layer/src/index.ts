@@ -32,7 +32,7 @@ export const DefaultOptions: WindLayerOptions = {
   colors: ['white'],
   flipY: false,
   verticalExaggeration: 1,
-  belowSeaLevel: false,
+  elevationMode: 'height',
   elevationStep: 1,
   useViewerBounds: false,
   minVisibleRatio: 0.6,
@@ -95,7 +95,7 @@ export class WindLayer {
    * @param {string[]} [options.colors=['white']] - Array of colors for particles. Can be used to create color gradients.
    * @param {boolean} [options.flipY=false] - Deprecated 2D-only texture-orientation override. Use windData.latIsAscending.
    * @param {number} [options.verticalExaggeration=1] - Multiplier applied to cube elevation coordinates.
-   * @param {boolean} [options.belowSeaLevel=false] - Whether cube levels extend downwards from their maximum elevation.
+   * @param {'height' | 'depth'} [options.elevationMode='height'] - Whether positive cube coordinates render above or below sea level.
    * @param {number} [options.elevationStep=1] - Positive integer interval between populated cube levels.
    * @param {boolean} [options.useViewerBounds=false] - Whether to use the viewer bounds to generate particles.
    * @param {number} [options.minVisibleRatio=0.6] - Minimum overview scale retained while zooming; use 1 to disable zoom scaling.
@@ -194,10 +194,9 @@ export class WindLayer {
       windData = { ...windData, speed };
     }
 
-    const maximumElevation = Math.max(...elevations);
     const particleHeights = Float32Array.from(elevations, elevation =>
-      this.options.belowSeaLevel
-        ? -(maximumElevation - elevation) * this.options.verticalExaggeration
+      this.options.elevationMode === 'depth'
+        ? -Math.abs(elevation) * this.options.verticalExaggeration
         : elevation * this.options.verticalExaggeration
     );
     return {
@@ -442,6 +441,10 @@ export class WindLayer {
     if (options.verticalExaggeration !== undefined && options.verticalExaggeration <= 0) {
       throw new RangeError('verticalExaggeration must be greater than zero');
     }
+    if (options.elevationMode !== undefined &&
+      options.elevationMode !== 'height' && options.elevationMode !== 'depth') {
+      throw new RangeError("elevationMode must be either 'height' or 'depth'");
+    }
     const particleTextureSizePerLevel = options.particlesTextureSize ?? this.particleTextureSizePerLevel;
     if (options.particlesTextureSize !== undefined) {
       if (!Number.isFinite(particleTextureSizePerLevel) || particleTextureSizePerLevel <= 0) {
@@ -463,7 +466,7 @@ export class WindLayer {
     this.particleTextureSizePerLevel = particleTextureSizePerLevel;
     options = { ...options, particlesTextureSize: particleTextureSize };
     const heightChanged = options.verticalExaggeration !== undefined ||
-      options.belowSeaLevel !== undefined || options.particleHeight !== undefined;
+      options.elevationMode !== undefined || options.particleHeight !== undefined;
     this.options = deepMerge(options, this.options);
     if (heightChanged) {
       this.windData = this.processWindData(this.windData);

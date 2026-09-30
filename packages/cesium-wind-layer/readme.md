@@ -91,7 +91,7 @@ const windCube: WindCubeData = {
 const windLayer = new WindLayer(viewer, windCube, {
   particlesTextureSize: 100,
   verticalExaggeration: 1000,
-  belowSeaLevel: true,
+  elevationMode: 'depth',
   elevationStep: 1
 });
 ```
@@ -100,8 +100,8 @@ The cube is packed into GPU texture atlases and rendered by one particle system.
 
 ### Elevation placement
 
-- With `belowSeaLevel: false`, height is `elevation * verticalExaggeration`.
-- With `belowSeaLevel: true`, height is `-(maximumElevation - elevation) * verticalExaggeration`. This places the largest coordinate at sea level and the remaining coordinates below it.
+- With `elevationMode: 'height'`, height is `elevation * verticalExaggeration`.
+- With `elevationMode: 'depth'`, height is `-abs(elevation) * verticalExaggeration`.
 - `elevationIsAscending` describes the order of the cube axis. When omitted, it is inferred from the first and last elevation values.
 - `elevationStep` renders every nth level. It must be a positive integer.
 
@@ -156,7 +156,7 @@ interface WindCubeData extends WindData {
 | `particlesTextureSize` | `100` | 2D texture dimension, or per-level baseline for a cube. Approximate particle count is the effective size squared. |
 | `particleHeight` | `1000` | Height in metres for a 2D field. |
 | `verticalExaggeration` | `1` | Multiplier applied to cube elevation coordinates. Must be greater than zero. |
-| `belowSeaLevel` | `false` | Interpret cube coordinates as levels extending downwards from the maximum coordinate. |
+| `elevationMode` | `'height'` | Interpret positive cube coordinates as heights above sea level or depths below it (`'height'` or `'depth'`). |
 | `elevationStep` | `1` | Populate every nth cube level. Must be a positive integer. |
 | `lineWidth` | `{ min: 1, max: 2 }` | Particle trail width range in pixels. |
 | `lineLength` | `{ min: 20, max: 100 }` | Particle trail length range. |
@@ -185,7 +185,7 @@ interface WindCubeData extends WindData {
 | `isDestroyed()` | Report whether the layer has been destroyed. |
 | `destroy()` | Remove primitives, event listeners, and GPU resources. |
 
-When changing `particlesTextureSize` on a cube, pass the desired per-level baseline. Changing `elevationStep` recalculates the effective particle texture size. Changing `verticalExaggeration`, `belowSeaLevel`, or `particleHeight` recalculates particle heights.
+When changing `particlesTextureSize` on a cube, pass the desired per-level baseline. Changing `elevationStep` recalculates the effective particle texture size. Changing `verticalExaggeration`, `elevationMode`, or `particleHeight` recalculates particle heights.
 
 ## Validation errors
 

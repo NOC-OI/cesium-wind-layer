@@ -1,5 +1,11 @@
 # cube-cesium-wind-layer
 
+## Unreleased
+
+### Minor Changes
+
+- Replace `belowSeaLevel` with `elevationMode: 'height' | 'depth'`. Depth mode maps each positive elevation coordinate to its negative absolute height independently.
+
 ## 0.12.1
 
 ### Patch Changes

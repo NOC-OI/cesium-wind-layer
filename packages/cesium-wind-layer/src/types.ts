@@ -1,5 +1,8 @@
 import { Cartesian3 } from 'cesium';
 
+/** Controls whether positive cube elevation coordinates are heights or depths. */
+export type ElevationMode = 'height' | 'depth';
+
 export interface WindLayerOptions {
   /**
    * Size of the particle texture for one elevation. For cubes, the texture is
@@ -52,8 +55,8 @@ export interface WindLayerOptions {
   flipY: boolean;
   /** Scale applied to cube elevation coordinates. Default is 1. */
   verticalExaggeration: number;
-  /** Interpret cube elevation coordinates as depths below sea level. Default is false. */
-  belowSeaLevel: boolean;
+  /** Interpret positive cube coordinates as heights or depths. Default is 'height'. */
+  elevationMode: ElevationMode;
   /** Interval between elevation levels populated with particles. Default is 1. */
   elevationStep: number;
   /**

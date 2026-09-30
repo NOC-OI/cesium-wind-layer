@@ -1,6 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { Viewer, Rectangle, ArcGisMapServerImageryProvider, ImageryLayer, Ion, CesiumTerrainProvider } from 'cesium';
-import { WindLayer, WindLayerOptions, type WindCubeData, type WindData } from 'cube-cesium-wind-layer';
+import {
+  Viewer,
+  Rectangle,
+  ArcGisMapServerImageryProvider,
+  ImageryLayer,
+  Ion,
+  CesiumTerrainProvider,
+  EllipsoidTerrainProvider,
+  Terrain,
+} from 'cesium';
+import {
+  WindLayer,
+  WindLayerOptions,
+  type ElevationMode,
+  type WindCubeData,
+  type WindData,
+} from 'cube-cesium-wind-layer';
 import { ControlPanel } from '@/components/ControlPanel';
 import styled from 'styled-components';
 import { colorSchemes } from '@/components/ColorTableInput';
@@ -43,6 +58,37 @@ const currentOptions = {
   lineLength: { min: 100, max: 1000 },
   particleHeight: 100,
 };
+
+const TERRAIN_URL = import.meta.env.VITE_TERRAIN_URL ||
+  'https://atlantis-vis-o.s3-ext.jc.rl.ac.uk/terrain/gebco/gebco-2026-vertexnormals/';
+const TERRAIN_VERTICAL_EXAGGERATION = 50;
+
+function updateTerrainForElevationMode(viewer: Viewer, elevationMode: ElevationMode): void {
+  const { scene } = viewer;
+  scene.verticalExaggerationRelativeHeight = 0;
+  if (elevationMode === 'depth') {
+    const terrain = new Terrain(CesiumTerrainProvider.fromUrl(TERRAIN_URL, {
+      requestVertexNormals: true,
+    }));
+    terrain.errorEvent.addEventListener(error => {
+      console.error('Unable to load Cesium World Bathymetry:', error);
+    });
+    terrain.readyEvent.addEventListener(provider => {
+      provider.errorEvent.addEventListener(error => {
+        console.error('Unable to load a bathymetry tile:', error);
+      });
+      scene.requestRender();
+    });
+    scene.setTerrain(terrain);
+    scene.globe.enableLighting = true;
+    scene.verticalExaggeration = TERRAIN_VERTICAL_EXAGGERATION;
+    return;
+  }
+  scene.globe.terrainProvider = new EllipsoidTerrainProvider();
+  scene.globe.enableLighting = false;
+  scene.verticalExaggeration = 1;
+  scene.requestRender();
+}
 
 const defaultOptions: Partial<WindLayerOptions> = {
   ...WindLayer.defaultOptions,
@@ -96,13 +142,7 @@ export function Earth() {
         sceneModePicker: false,
       });
     }
-    // Add terrain
-    CesiumTerrainProvider.fromIonAssetId(1).then(terrainProvider => {
-      if (viewerRef.current) {
-        viewerRef.current.terrainProvider = terrainProvider;
-      }
-    });
-
+    updateTerrainForElevationMode(viewerRef.current, 'height');
     viewerRef.current.scene.globe.depthTestAgainstTerrain = true;
     // Optional: Add exaggeration to make terrain features more visible
     // viewerRef.current.scene.verticalExaggeration = 2;
@@ -184,6 +224,9 @@ export function Earth() {
     if (visualizationMode === '3d' && changedOptions.verticalExaggeration !== undefined) {
       cubeVerticalExaggerationRef.current = changedOptions.verticalExaggeration;
     }
+    if (changedOptions.elevationMode !== undefined && viewerRef.current) {
+      updateTerrainForElevationMode(viewerRef.current, changedOptions.elevationMode);
+    }
     setOptions(current => ({ ...current, ...changedOptions }));
   };
 
@@ -210,11 +253,12 @@ export function Earth() {
         const cubeOptions = {
           particlesTextureSize: cubeParticleTextureSize,
           verticalExaggeration: cubeVerticalExaggerationRef.current,
-          belowSeaLevel: false,
+          elevationMode: 'depth' as const,
           elevationStep: 1,
         };
         layer.updateOptions(cubeOptions);
         layer.updateWindData(cube);
+        updateTerrainForElevationMode(viewerRef.current!, cubeOptions.elevationMode);
         setOptions(current => ({ ...current, ...cubeOptions }));
       } else {
         const surface = surfaceDataRef.current;
@@ -225,10 +269,11 @@ export function Earth() {
         const surfaceOptions = {
           particlesTextureSize: surfaceParticleTextureSizeRef.current,
           verticalExaggeration: 1,
-          belowSeaLevel: false,
+          elevationMode: 'height' as const,
           elevationStep: 1,
         };
         layer.updateOptions(surfaceOptions);
+        updateTerrainForElevationMode(viewerRef.current!, surfaceOptions.elevationMode);
         setOptions(current => ({ ...current, ...surfaceOptions }));
       }
       setVisualizationMode(mode);

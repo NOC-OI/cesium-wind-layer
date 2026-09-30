@@ -305,7 +305,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 help={
                   <Text type="secondary" style={{ fontSize: '11px' }}>
                     {visualizationMode === '3d'
-                      ? `Extruding the first ${CUBE_DEPTH_LEVELS} ocean depth levels above the globe so the complete cube remains visible.`
+                      ? `Rendering the first ${CUBE_DEPTH_LEVELS} ocean depth levels using the selected height or depth placement.`
                       : 'Rendering currents at the ocean surface only.'}
                   </Text>
                 }
@@ -326,7 +326,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 name="verticalExaggeration"
                 label={renderLabel(
                   'Vertical Exaggeration',
-                  'Multiplies the real spacing between depth levels in the above-globe 3D extrusion.'
+                  'Multiplies the real spacing between levels in the 3D cube.'
                 )}
                 help={
                   visualizationMode === '2d' ? (
@@ -342,6 +342,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   step={100}
                   precision={0}
                   disabled={visualizationMode === '2d' || visualizationLoading}
+                />
+              </CompactFormItem>
+
+              <CompactFormItem
+                name="elevationMode"
+                label={renderLabel(
+                  'Elevation Mode',
+                  "Render positive cube coordinates as heights above sea level or depths below it."
+                )}
+                help={
+                  visualizationMode === '2d' ? (
+                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                      Available in 3D Depth Cube mode.
+                    </Text>
+                  ) : undefined
+                }
+              >
+                <Segmented
+                  block
+                  disabled={visualizationMode === '2d' || visualizationLoading}
+                  options={[
+                    { label: 'Height', value: 'height' },
+                    { label: 'Depth', value: 'depth' },
+                  ]}
                 />
               </CompactFormItem>
 

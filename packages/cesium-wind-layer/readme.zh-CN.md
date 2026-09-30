@@ -103,6 +103,9 @@ interface WindLayerOptions {
   dropRateBump: number;                      // 额外消失率（默认：0.01）
   colors: string[];                          // 粒子颜色数组（默认：['white']）
   flipY: boolean;                            // 是否翻转 Y 坐标（默认：false）
+  verticalExaggeration: number;              // 立方体高程缩放（默认：1）
+  elevationMode: 'height' | 'depth';         // 正高程坐标表示高度或深度（默认：'height'）
+  elevationStep: number;                     // 高程层采样间隔（默认：1）
   useViewerBounds: boolean;                  // 是否使用视域范围生成粒子（默认：false）
   domain?: {                                 // 速度渲染范围（默认：undefined）
     min?: number;                            // 最小速度值
