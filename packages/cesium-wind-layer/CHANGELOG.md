@@ -1,8 +1,15 @@
 # cube-cesium-wind-layer
 
-## Unreleased
+## 0.12.3
 
-### Minor Changes
+### Patch Changes
+
+- Update only the small elevation texture when height options change, leaving U/V textures and particle state intact.
+
+
+## 0.12.2
+
+### Patch Changes
 
 - Replace `belowSeaLevel` with `elevationMode: 'height' | 'depth'`. Depth mode maps each positive elevation coordinate to its negative absolute height independently.
 

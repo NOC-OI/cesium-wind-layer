@@ -133,19 +133,23 @@ export class WindParticlesComputing {
           arrayBufferView: packedV
         }
       }),
-      elevation: new Texture({
-        context: this.context,
-        width: this.windData.depth,
-        height: 1,
-        pixelFormat: PixelFormat.RED,
-        pixelDatatype: PixelDatatype.FLOAT,
-        sampler: new Sampler({
-          minificationFilter: TextureMinificationFilter.NEAREST,
-          magnificationFilter: TextureMagnificationFilter.NEAREST
-        }),
-        source: { arrayBufferView: this.windData.particleHeights }
-      })
+      elevation: this.createElevationTexture(this.windData.particleHeights)
     };
+  }
+
+  private createElevationTexture(particleHeights: Float32Array): Texture {
+    return new Texture({
+      context: this.context,
+      width: this.windData.depth,
+      height: 1,
+      pixelFormat: PixelFormat.RED,
+      pixelDatatype: PixelDatatype.FLOAT,
+      sampler: new Sampler({
+        minificationFilter: TextureMinificationFilter.NEAREST,
+        magnificationFilter: TextureMagnificationFilter.NEAREST
+      }),
+      source: { arrayBufferView: particleHeights }
+    });
   }
 
   createParticlesTextures() {
@@ -268,6 +272,12 @@ export class WindParticlesComputing {
   updateWindData(data: ProcessedWindData) {
     this.windData = data;
     this.reCreateWindTextures();
+  }
+
+  updateParticleHeights(particleHeights: Float32Array) {
+    this.windData = { ...this.windData, particleHeights };
+    this.windTextures.elevation.destroy();
+    this.windTextures.elevation = this.createElevationTexture(particleHeights);
   }
 
   updateOptions(options: Partial<WindLayerOptions>) {

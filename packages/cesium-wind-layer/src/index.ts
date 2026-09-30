@@ -465,12 +465,17 @@ export class WindLayer {
     }
     this.particleTextureSizePerLevel = particleTextureSizePerLevel;
     options = { ...options, particlesTextureSize: particleTextureSize };
-    const heightChanged = options.verticalExaggeration !== undefined ||
-      options.elevationMode !== undefined || options.particleHeight !== undefined;
+    const heightChanged =
+      (options.verticalExaggeration !== undefined &&
+        options.verticalExaggeration !== this.options.verticalExaggeration) ||
+      (options.elevationMode !== undefined &&
+        options.elevationMode !== this.options.elevationMode) ||
+      (options.particleHeight !== undefined &&
+        options.particleHeight !== this.options.particleHeight);
     this.options = deepMerge(options, this.options);
     if (heightChanged) {
       this.windData = this.processWindData(this.windData);
-      this.particleSystem.computing.updateWindData(this.windData);
+      this.particleSystem.computing.updateParticleHeights(this.windData.particleHeights);
     }
     this.particleSystem.changeOptions(options);
     this.viewer.scene.requestRender();
