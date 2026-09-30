@@ -194,9 +194,10 @@ export class WindLayer {
       windData = { ...windData, speed };
     }
 
+    const maximumElevation = Math.max(...elevations);
     const particleHeights = Float32Array.from(elevations, elevation =>
       this.options.elevationMode === 'depth'
-        ? -Math.abs(elevation) * this.options.verticalExaggeration
+        ? (elevation - maximumElevation) * this.options.verticalExaggeration
         : elevation * this.options.verticalExaggeration
     );
     return {

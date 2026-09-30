@@ -101,7 +101,7 @@ The cube is packed into GPU texture atlases and rendered by one particle system.
 ### Elevation placement
 
 - With `elevationMode: 'height'`, height is `elevation * verticalExaggeration`.
-- With `elevationMode: 'depth'`, height is `-abs(elevation) * verticalExaggeration`.
+- With `elevationMode: 'depth'`, height is `(elevation - maximumElevation) * verticalExaggeration`. This moves the cube below sea level without reversing its elevation-index direction.
 - `elevationIsAscending` describes the order of the cube axis. When omitted, it is inferred from the first and last elevation values.
 - `elevationStep` renders every nth level. It must be a positive integer.
 

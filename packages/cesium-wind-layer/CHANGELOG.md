@@ -1,5 +1,11 @@
 # cube-cesium-wind-layer
 
+## 0.12.4
+
+### Patch Changes
+
+- Preserve elevation-to-data-plane ordering in depth mode by translating velocity cubes below sea level instead of negating elevation magnitudes.
+
 ## 0.12.3
 
 ### Patch Changes
