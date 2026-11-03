@@ -1,5 +1,11 @@
 # cube-cesium-wind-layer
 
+## 0.12.5
+
+### Patch Changes
+
+- Update the package version to 0.12.5.
+
 ## 0.12.4
 
 ### Patch Changes
