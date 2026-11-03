@@ -108,6 +108,11 @@ export interface WindData {
   u: WindDataDemention;
   v: WindDataDemention;
   speed?: WindDataDemention;
+  /**
+   * Optional cell-validity mask aligned with the component arrays. A zero value
+   * marks no-data; any non-zero value marks a valid velocity sample.
+   */
+  validity?: Uint8Array;
   width: number;
   height: number;
   /** True when array rows progress from south to north. */

@@ -167,6 +167,9 @@ export class WindLayer {
     if (windData.u.array.length !== expectedLength || windData.v.array.length !== expectedLength) {
       throw new RangeError(`Wind component arrays must contain ${expectedLength} values`);
     }
+    if (windData.validity && windData.validity.length !== expectedLength) {
+      throw new RangeError(`Wind validity mask must contain ${expectedLength} values`);
+    }
     if (elevations.length !== depth || elevations.some(value => !Number.isFinite(value))) {
       throw new RangeError('Wind cube elevations must be finite and match its depth');
     }
@@ -258,6 +261,13 @@ export class WindLayer {
     const i10 = levelOffset + y0 * width + x1;
     const i01 = levelOffset + y1 * width + x0;
     const i11 = levelOffset + y1 * width + x1;
+
+    if (this.windData.validity &&
+      (!this.windData.validity[index] || !this.windData.validity[i00] ||
+       !this.windData.validity[i10] || !this.windData.validity[i01] ||
+       !this.windData.validity[i11])) {
+      return null;
+    }
 
     // Bilinear interpolation for u component
     const u00 = u.array[i00];

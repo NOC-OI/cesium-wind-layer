@@ -11,6 +11,7 @@ export class WindParticlesComputing {
   windTextures!: {
     U: Texture;
     V: Texture;
+    validity: Texture;
     elevation: Texture;
   };
   particlesTextures!: {
@@ -119,6 +120,21 @@ export class WindParticlesComputing {
     }
     const packedU = pack(this.windData.u.array);
     const packedV = pack(this.windData.v.array);
+    const validity = this.windData.validity ?? new Uint8Array(this.windData.u.array.length).fill(255);
+    const packedValidity = new Uint8Array(atlasWidth * atlasHeight);
+    const sliceSize = this.windData.width * this.windData.height;
+    for (let level = 0; level < this.windData.depth; level++) {
+      const atlasColumn = level % columns;
+      const atlasRow = Math.floor(level / columns);
+      for (let y = 0; y < this.windData.height; y++) {
+        const sourceY = this.options.flipY ? this.windData.height - 1 - y : y;
+        const sourceOffset = level * sliceSize + sourceY * this.windData.width;
+        const targetOffset = (atlasRow * this.windData.height + y) * atlasWidth + atlasColumn * this.windData.width;
+        for (let x = 0; x < this.windData.width; x++) {
+          packedValidity[targetOffset + x] = validity[sourceOffset + x] ? 255 : 0;
+        }
+      }
+    }
 
     this.windTextures = {
       U: new Texture({
@@ -132,6 +148,19 @@ export class WindParticlesComputing {
         source: {
           arrayBufferView: packedV
         }
+      }),
+      validity: new Texture({
+        context: this.context,
+        width: atlasWidth,
+        height: atlasHeight,
+        pixelFormat: PixelFormat.RED,
+        pixelDatatype: PixelDatatype.UNSIGNED_BYTE,
+        flipY: false,
+        sampler: new Sampler({
+          minificationFilter: TextureMinificationFilter.NEAREST,
+          magnificationFilter: TextureMagnificationFilter.NEAREST
+        }),
+        source: { arrayBufferView: packedValidity }
       }),
       elevation: this.createElevationTexture(this.windData.particleHeights)
     };
@@ -189,6 +218,7 @@ export class WindParticlesComputing {
         uniformMap: {
           U: () => this.windTextures.U,
           V: () => this.windTextures.V,
+          validity: () => this.windTextures.validity,
           elevation: () => this.windTextures.elevation,
           uRange: () => new Cartesian2(this.windData.u.min, this.windData.u.max),
           vRange: () => new Cartesian2(this.windData.v.min, this.windData.v.max),

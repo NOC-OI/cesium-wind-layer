@@ -77,7 +77,8 @@ void main() {
     float randomNumber = rand(seed2, normalRange);
 
     bool uninitialized = nextParticle.x == 0.0 && nextParticle.y == 0.0;
-    if (uninitialized || randomNumber < particleDropRate || particleOutbound(nextParticle)) {
+    bool invalidData = speedNorm < 0.0;
+    if (uninitialized || invalidData || randomNumber < particleDropRate || particleOutbound(nextParticle)) {
         fragColor = vec4(randomParticle, 1.0); // 1.0 means this is a random particle
     } else {
         fragColor = vec4(nextParticle, 0.0);

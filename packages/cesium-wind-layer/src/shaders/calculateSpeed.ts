@@ -3,6 +3,7 @@ export const calculateSpeedShader = /*glsl*/`#version 300 es
 // the size of UV textures: width = lon, height = lat
 uniform sampler2D U; // eastward wind
 uniform sampler2D V; // northward wind
+uniform sampler2D validity; // non-zero for valid velocity cells
 uniform sampler2D currentParticlesPosition; // (lon, lat, normalized elevation, reset flag)
 
 uniform vec2 uRange; // (min, max)
@@ -52,7 +53,11 @@ vec2 getWindComponents(vec3 position) {
     return vec2(u, v);
 }
 
-vec2 bilinearInterpolation(vec3 position) {
+float getValidity(vec3 position) {
+    return texture(validity, mapPositionToAtlasUV(position)).r;
+}
+
+vec2 bilinearInterpolation(vec3 position, out bool valid) {
     float lon = position.x;
     float lat = position.y;
 
@@ -69,6 +74,15 @@ vec2 bilinearInterpolation(vec3 position) {
     vec2 v10 = getWindComponents(vec3(lon1, lat0, position.z));
     vec2 v01 = getWindComponents(vec3(lon0, lat1, position.z));
     vec2 v11 = getWindComponents(vec3(lon1, lat1, position.z));
+
+    if (getValidity(vec3(lon0, lat0, position.z)) < 0.5 ||
+        getValidity(vec3(lon1, lat0, position.z)) < 0.5 ||
+        getValidity(vec3(lon0, lat1, position.z)) < 0.5 ||
+        getValidity(vec3(lon1, lat1, position.z)) < 0.5) {
+        valid = false;
+        return vec2(0.0);
+    }
+    valid = true;
 
     // Check if all wind vectors are zero
     if (length(v00) == 0.0 && length(v10) == 0.0 && length(v01) == 0.0 && length(v11) == 0.0) {
@@ -115,14 +129,25 @@ vec2 convertSpeedUnitToLonLat(vec2 lonLat, vec2 speed) {
     return windVectorInLonLat;
 }
 
-vec2 calculateSpeedByRungeKutta2(vec3 position) {
+vec2 calculateSpeedByRungeKutta2(vec3 position, out bool valid) {
     // see https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods#Second-order_methods_with_two_stages for detail
     const float h = 0.5;
 
     vec2 y_n = position.xy;
-    vec2 f_n = bilinearInterpolation(position);
+    bool firstValid;
+    vec2 f_n = bilinearInterpolation(position, firstValid);
+    if (!firstValid) {
+        valid = false;
+        return vec2(0.0);
+    }
     vec2 midpoint = y_n + 0.5 * h * convertSpeedUnitToLonLat(y_n, f_n) * speedScaleFactor;
-    vec2 speed = h * bilinearInterpolation(vec3(midpoint, position.z)) * speedScaleFactor;
+    bool midpointValid;
+    vec2 speed = h * bilinearInterpolation(vec3(midpoint, position.z), midpointValid) * speedScaleFactor;
+    if (!midpointValid) {
+        valid = false;
+        return vec2(0.0);
+    }
+    valid = true;
 
     return speed;
 }
@@ -145,8 +170,18 @@ out vec4 fragColor;
 void main() {
     // texture coordinate must be normalized
     vec3 position = texture(currentParticlesPosition, v_textureCoordinates).rgb;
-    vec2 speedOrigin = bilinearInterpolation(position);
-    vec2 speed = calculateSpeedByRungeKutta2(position) * frameRateAdjustment;
+    bool valid;
+    vec2 speedOrigin = bilinearInterpolation(position, valid);
+    if (!valid) {
+        fragColor = vec4(0.0, 0.0, 0.0, -1.0);
+        return;
+    }
+    bool trajectoryValid;
+    vec2 speed = calculateSpeedByRungeKutta2(position, trajectoryValid) * frameRateAdjustment;
+    if (!trajectoryValid) {
+        fragColor = vec4(0.0, 0.0, 0.0, -1.0);
+        return;
+    }
     vec2 speedInLonLat = convertSpeedUnitToLonLat(position.xy, speed);
 
     fragColor = vec4(speedInLonLat, calculateWindNorm(speedOrigin));

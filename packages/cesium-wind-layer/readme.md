@@ -136,6 +136,7 @@ interface WindData {
   u: { array: Float32Array; min?: number; max?: number };
   v: { array: Float32Array; min?: number; max?: number };
   speed?: { array: Float32Array; min?: number; max?: number };
+  validity?: Uint8Array; // zero = no-data, non-zero = valid
   width: number;
   height: number;
   bounds: { west: number; south: number; east: number; north: number };
@@ -186,6 +187,10 @@ interface WindCubeData extends WindData {
 | `destroy()` | Remove primitives, event listeners, and GPU resources. |
 
 When changing `particlesTextureSize` on a cube, pass the desired per-level baseline. Changing `elevationStep` recalculates the effective particle texture size. Changing `verticalExaggeration`, `elevationMode`, or `particleHeight` recalculates particle heights.
+
+When `validity` is supplied, interpolation requires all four surrounding cells
+to be valid. Particles that reach a no-data cell are reset instead of flowing
+through a synthetic zero-velocity region.
 
 ## Validation errors
 
