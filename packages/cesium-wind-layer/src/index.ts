@@ -157,7 +157,9 @@ export class WindLayer {
 
   private processWindData(windData: WindFieldData): ProcessedWindData {
     const depth = 'depth' in windData ? windData.depth : 1;
-    const elevations = 'elevations' in windData ? Array.from(windData.elevations, Number) : [this.options.particleHeight];
+    const elevations = this.isCubeData && 'elevations' in windData
+      ? Array.from(windData.elevations, Number)
+      : [this.options.particleHeight];
     const expectedLength = windData.width * windData.height * depth;
     if (!Number.isInteger(windData.width) || windData.width < 1 ||
       !Number.isInteger(windData.height) || windData.height < 1 ||

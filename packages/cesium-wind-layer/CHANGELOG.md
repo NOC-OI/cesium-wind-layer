@@ -1,5 +1,11 @@
 # cube-cesium-wind-layer
 
+## 0.12.6
+
+### Patch Changes
+
+- Allow update of the particle height without decreate the layer
+
 ## 0.12.5
 
 ### Patch Changes
